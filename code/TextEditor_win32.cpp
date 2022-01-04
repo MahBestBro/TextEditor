@@ -4,72 +4,32 @@
 
 #include <windows.h> 
 #include "stdio.h"
-#include "TextEditor_win32.h"
 
-#define PIXEL_IN_BYTES 4
-
-#define INPUT_DOWN 0b001
-#define INPUT_UP   0b010
-#define INPUT_HELD 0b100
-
-#define NUM_INPUTS 39
-
-union Input
-{
-    struct
-    {
-        byte leftMouse;
-        byte rightMouse;
-        byte middleMouse;
-        byte letterKeys[26];
-        byte numberKeys[10];
-    };
-    byte flags[NUM_INPUTS];
-};
+#include "TextEditor.h"
+#include "TextEditor_input.h"
 
 global_variable Input input = {};
 
 global_variable BITMAPINFO bitmapInfo;
-global_variable void* bitmapMemory;
-global_variable int bitmapWidth;
-global_variable int bitmapHeight;
+global_variable ScreenBuffer screenBuffer;
 global_variable bool running;
 
-inline bool InputDown(byte inputFlags)
+wchar* CStrToWStr(const char *c)
 {
-    return (inputFlags & INPUT_DOWN) == INPUT_DOWN;
-}
+    const size_t cSize = strlen(c)+1;
+    wchar* wc = (wchar*)malloc(cSize * sizeof(wchar));
+    mbstowcs_s(0, wc, cSize, c, cSize+1);
 
-inline bool InputUp(byte inputFlags)
-{
-    return (inputFlags & INPUT_UP) == INPUT_UP;
-}
-
-inline bool InputHeld(byte inputFlags)
-{
-    return (inputFlags & INPUT_HELD) == INPUT_HELD;
-}
-
-internal void ProcessInput()
-{
-    for (int i = 0; i < NUM_INPUTS; ++i)
-    {
-        if (InputDown(input.flags[i]))
-        {
-            input.flags[i] &= ~INPUT_DOWN;
-            input.flags[i] |= INPUT_HELD;
-        }
-        else if (InputUp(input.flags[i]))
-        {
-            input.flags[i] &= ~INPUT_UP;
-        }
-    }
+    return wc;
 }
 
 inline void win32_HandleInputDown(byte* inputFlags)
 {
-    *inputFlags |= INPUT_DOWN;
-    *inputFlags |= INPUT_HELD;
+    if (!InputHeld(*inputFlags)) 
+    {
+        *inputFlags |= INPUT_DOWN;
+        *inputFlags |= INPUT_HELD;
+    }
 }
 
 inline void win32_HandleInputUp(byte* inputFlags)
@@ -78,83 +38,65 @@ inline void win32_HandleInputUp(byte* inputFlags)
     *inputFlags |= INPUT_UP;
 }
 
-internal void Draw(int xOffset, int yOffset)
+internal void win32_ProcessInput()
 {
-    int width = bitmapWidth;
-    int height = bitmapHeight;
-
-    int pitch = width * PIXEL_IN_BYTES;
-    byte* row = (byte*)bitmapMemory;
-    for (int y = 0; y < bitmapHeight; ++y)
+    for (int i = 0; i < NUM_INPUTS; ++i)
     {
-        byte* pixel = (byte*)row;
-        for (int x = 0; x < bitmapWidth; ++x)
+        if (InputDown(input.flags[i]))
         {
-            //Pixel in memory: 0xBBGGRRxx
-            *pixel = (byte)(x + xOffset);
-            pixel++;
-            *pixel = (byte)(y + yOffset);
-            pixel++;
-            *pixel = 0;
-            pixel++;
-            *pixel = 0;
-            pixel++;
+            input.flags[i] &= ~INPUT_DOWN;
         }
-
-        row += pitch;
+        else if (InputUp(input.flags[i]))
+        {
+            input.flags[i] &= ~INPUT_UP;
+        }
     }
 }
 
-//TODO: This is janky af, either refactor or just get rid of lol
-void win32_LogInput(int inputIndex)
+void win32_LogInput(InputCode code)
 {
-    wchar_t inputLog[32] = {};
+    wchar inputLog[32];
+    wchar* codeStr = CStrToWStr(InputCodeToStr(code));
+    if (code >= MOUSE_START && code < ARROWS_START)
+        swprintf_s(inputLog, L"%s BUTTON", codeStr);
+    else if (code >= ARROWS_START && code < NON_SHIFT_START)
+        swprintf_s(inputLog, L"%s ARROW KEY", codeStr);
+    else
+        swprintf_s(inputLog, L"%s KEY", codeStr);
+    free(codeStr);
 
-    if (inputIndex == 0)
-        swprintf_s(inputLog, L"LEFT MOUSE BUTTON");
-    else if (inputIndex == 1)
-        swprintf_s(inputLog, L"RIGHT MOUSE BUTTON");
-    else if (inputIndex == 2)
-        swprintf_s(inputLog, L"MIDDLE MOUSE BUTTON");
-    else if (inputIndex >= 3 || inputIndex <= 29)
-        swprintf_s(inputLog, L"%c KEY", inputIndex - 3 + 'A');
-    else if (inputIndex >= 30 || inputIndex <= 40)
-        swprintf_s(inputLog, L"%c KEY", inputIndex - 3 + '0');
-
-    wchar_t log[64];
-    if (InputDown(input.flags[inputIndex]))
+    wchar log[64];
+    if (InputDown(input.flags[code]))
         swprintf_s(log, L"%s DOWN\n", inputLog);
-    else if (InputUp(input.flags[inputIndex]))
+    else if (InputUp(input.flags[code]))
         swprintf_s(log, L"%s UP\n", inputLog);
-    else if (InputHeld(input.flags[inputIndex]))
+    else if (InputHeld(input.flags[code]))
         swprintf_s(log, L"HOLDING %s\n", inputLog);
 
-    if (input.flags[inputIndex])
+    if (input.flags[code])
         OutputDebugString(log);
 }
 
 //DIB: Device Independent Bitmap
 internal void win32_ResizeDIB(int width, int height)
 {
-    if (bitmapMemory)
+    if (screenBuffer.memory)
     {
-        VirtualFree(bitmapMemory, 0, MEM_RELEASE);
+        VirtualFree(screenBuffer.memory, 0, MEM_RELEASE);
     }
 
-    bitmapWidth = width;
-    bitmapHeight = height;
+    screenBuffer.width = width;
+    screenBuffer.height = height;
 
     bitmapInfo.bmiHeader.biSize        = sizeof(bitmapInfo.bmiHeader);
-    bitmapInfo.bmiHeader.biWidth       = bitmapWidth;
-    bitmapInfo.bmiHeader.biHeight      = bitmapHeight;
+    bitmapInfo.bmiHeader.biWidth       = screenBuffer.width;
+    bitmapInfo.bmiHeader.biHeight      = screenBuffer.height;
     bitmapInfo.bmiHeader.biPlanes      = 1;
     bitmapInfo.bmiHeader.biBitCount    = 32;
     bitmapInfo.bmiHeader.biCompression = BI_RGB;
 
-    int bitmapMemorySize = PIXEL_IN_BYTES * bitmapWidth * bitmapHeight;
-    bitmapMemory = VirtualAlloc(0, bitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
-
-    Draw(128, 0);    
+    int bitmapMemorySize = PIXEL_IN_BYTES * screenBuffer.width * screenBuffer.height;
+    screenBuffer.memory = VirtualAlloc(0, bitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);   
 
 }
 
@@ -165,9 +107,9 @@ internal void win32_UpdateWindow(HDC deviceContext, RECT* windowRect,
     int windowHeight = windowRect->bottom - windowRect->top;
     StretchDIBits(
         deviceContext, 
-        0, 0, bitmapWidth, bitmapHeight,
+        0, 0, screenBuffer.width, screenBuffer.height,
         0, 0, windowWidth, windowHeight,
-        bitmapMemory,
+        screenBuffer.memory,
         &bitmapInfo,
         DIB_RGB_COLORS,
         SRCCOPY);
@@ -179,7 +121,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                     PWSTR pCmdLine, int nCmdShow)
 {
     // Register the window class.
-    const wchar_t windowName[]  = L"TextEditorWindowClass";
+    const wchar windowName[]  = L"TextEditorWindowClass";
     
     WNDCLASS wc = {};
     wc.lpfnWndProc   = WindowProc;
@@ -218,15 +160,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     int yOffset = 0;
     while (running)
     { 
-		win32_LogInput(0);
-		win32_LogInput(1);
-		win32_LogInput(2);
-		for (int i = 0; i < 26; ++i)
-			win32_LogInput(3 + i);
-		for (int i = 0; i < 10; ++i)
-			win32_LogInput(29 + i);
+        for (int i = 0; i < NUM_INPUTS; ++i)
+            win32_LogInput((InputCode)i);
 
-        ProcessInput();
+        win32_ProcessInput();
 
         MSG msg;
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
@@ -238,9 +175,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             DispatchMessageA(&msg);
         }
 
-        wchar_t inputLog[64];
+        wchar inputLog[64];
 
-        Draw(xOffset, yOffset);
+        Draw(&screenBuffer, xOffset, yOffset);
         
         HDC hdc = GetDC(hwnd);
         RECT windowRect;
@@ -324,39 +261,97 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         case WM_SYSKEYDOWN:
         case WM_KEYDOWN:
         {
-            uint32 c = (uint32)wParam;
-            if (c >= (uint32)'A' || c <= (uint32)'Z')
-            {
-                win32_HandleInputDown(&input.letterKeys[c - 'A']);
-            }
-            else if (c >= (uint32)'0' || c <= (uint32)'9')
-            {
-                win32_HandleInputDown(&input.numberKeys[c - '0']);
-            }
-            else
-            {
-                //Handle all other keys
-            }
-
+            uint32 vkCode = (uint32)wParam;
+            if (vkCode >= (uint32)'A' && vkCode <= (uint32)'Z')
+                win32_HandleInputDown(&input.letterKeys[vkCode - 'A']);
+            else if (vkCode >= (uint32)'0' && vkCode <= (uint32)'9')
+                win32_HandleInputDown(&input.numberKeys[vkCode - '0']);
+            else if (vkCode >= VK_LEFT && vkCode <= VK_DOWN)
+                win32_HandleInputDown(&input.arrowKeys[vkCode - VK_LEFT]);
+            else if (vkCode == VK_BACK)
+                win32_HandleInputDown(&input.backspace);
+            else if (vkCode == VK_SHIFT || vkCode == VK_LSHIFT)
+                win32_HandleInputDown(&input.leftShift);
+            else if (vkCode == VK_MENU || vkCode == VK_LMENU)
+                win32_HandleInputDown(&input.leftAlt);
+            else if (vkCode == VK_CAPITAL)
+                win32_HandleInputDown(&input.capsLock);
+            else if (vkCode == VK_TAB)
+                win32_HandleInputDown(&input.tab);
+            else if (vkCode == VK_RETURN)
+                win32_HandleInputDown(&input.enter);
+            else if (vkCode == VK_CONTROL || vkCode == VK_LCONTROL)
+                win32_HandleInputDown(&input.leftCtrl);
+            else if (vkCode == VK_SPACE)
+                win32_HandleInputDown(&input.space);
+            else if (vkCode == VK_OEM_4)
+                win32_HandleInputDown(&input.flags[INPUTCODE_OPEN_SQ_BRACKET]);
+            else if (vkCode == VK_OEM_6)
+                win32_HandleInputDown(&input.flags[INPUTCODE_CLOSED_SQ_BRACKET]);
+            else if (vkCode == VK_OEM_COMMA) 
+                win32_HandleInputDown(&input.flags[INPUTCODE_COMMA]);
+            else if (vkCode == VK_OEM_PERIOD) 
+                win32_HandleInputDown(&input.flags[INPUTCODE_PERIOD]);
+            else if (vkCode == VK_OEM_7) 
+                win32_HandleInputDown(&input.flags[INPUTCODE_QUOTE]);
+            else if (vkCode == VK_OEM_2) 
+                win32_HandleInputDown(&input.flags[INPUTCODE_FORWARD_SLASH]);
+            else if (vkCode == VK_OEM_3) 
+                win32_HandleInputDown(&input.grave);
+            else if (vkCode == VK_OEM_PLUS) 
+                win32_HandleInputDown(&input.equals);
+            else if (vkCode == VK_OEM_MINUS) 
+                win32_HandleInputDown(&input.minus);
+            else if (vkCode == VK_OEM_5) 
+                win32_HandleInputDown(&input.backslash);
         } return 0;
 
         case WM_SYSKEYUP:
         case WM_KEYUP:
         {
-            uint32 c = (uint32)wParam;
-            if (c >= (uint32)'A' || c <= (uint32)'Z')
-            {
-                win32_HandleInputUp(&input.letterKeys[c - 'A']);
-            }
-            else if (c >= (uint32)'0' || c <= (uint32)'9')
-            {
-                win32_HandleInputUp(&input.numberKeys[c - '0']);
-            }
-            else
-            {
-                //Handle all other keys
-            }
-
+            uint32 vkCode = (uint32)wParam;
+            if (vkCode >= (uint32)'A' && vkCode <= (uint32)'Z')
+                win32_HandleInputUp(&input.letterKeys[vkCode - 'A']);
+            else if (vkCode >= (uint32)'0' && vkCode <= (uint32)'9')
+                win32_HandleInputUp(&input.numberKeys[vkCode - '0']);
+            else if (vkCode >= VK_LEFT && vkCode <= VK_DOWN)
+                win32_HandleInputUp(&input.arrowKeys[vkCode - VK_LEFT]);
+            else if (vkCode == VK_BACK)
+                win32_HandleInputUp(&input.backspace);
+            else if (vkCode == VK_SHIFT || vkCode == VK_LSHIFT)
+                win32_HandleInputUp(&input.leftShift);
+            else if (vkCode == VK_MENU || vkCode == VK_LMENU)
+                win32_HandleInputUp(&input.leftAlt);
+            else if (vkCode == VK_CAPITAL)
+                win32_HandleInputUp(&input.capsLock);
+            else if (vkCode == VK_TAB)
+                win32_HandleInputUp(&input.tab);
+            else if (vkCode == VK_RETURN)
+                win32_HandleInputUp(&input.enter);
+            else if (vkCode == VK_CONTROL || vkCode == VK_LCONTROL)
+                win32_HandleInputUp(&input.leftCtrl);
+            else if (vkCode == VK_SPACE)
+                win32_HandleInputUp(&input.space);
+            else if (vkCode == VK_OEM_4)
+                win32_HandleInputUp(&input.flags[INPUTCODE_OPEN_SQ_BRACKET]);
+            else if (vkCode == VK_OEM_6)
+                win32_HandleInputUp(&input.flags[INPUTCODE_CLOSED_SQ_BRACKET]);
+            else if (vkCode == VK_OEM_COMMA) 
+                win32_HandleInputUp(&input.flags[INPUTCODE_COMMA]);
+            else if (vkCode == VK_OEM_PERIOD) 
+                win32_HandleInputUp(&input.flags[INPUTCODE_PERIOD]);
+            else if (vkCode == VK_OEM_7) 
+                win32_HandleInputUp(&input.flags[INPUTCODE_QUOTE]);
+            else if (vkCode == VK_OEM_2) 
+                win32_HandleInputUp(&input.flags[INPUTCODE_FORWARD_SLASH]);
+            else if (vkCode == VK_OEM_3) 
+                win32_HandleInputUp(&input.grave);
+            else if (vkCode == VK_OEM_PLUS) 
+                win32_HandleInputUp(&input.equals);
+            else if (vkCode == VK_OEM_MINUS) 
+                win32_HandleInputUp(&input.minus);
+            else if (vkCode == VK_OEM_5) 
+                win32_HandleInputUp(&input.backslash);
         } return 0;
         
         
