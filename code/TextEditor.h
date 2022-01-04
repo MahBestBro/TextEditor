@@ -12,7 +12,11 @@
 #define PIXEL_IN_BYTES 4
 
 typedef uint8_t byte;
+typedef uint8_t uchar;
+typedef uint8_t uint8;
 typedef uint32_t uint32;
+
+typedef int32_t int32;
 
 typedef wchar_t wchar;
 
@@ -22,6 +26,14 @@ struct ScreenBuffer
     int width, height;
 };
 
-void Draw(ScreenBuffer* screenBuffer, int xOffset, int yOffset);
+struct FontChar
+{
+    uint32 width, height; // Size of glyph
+    uint32 left, top;     // Offset from baseline to left/top of glyph
+    uint32 advance;       // Offset to advance to next glyph
+    void* pixels;
+};
+
+void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], int xOffset, int yOffset);
 
 #endif
