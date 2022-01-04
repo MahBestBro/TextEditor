@@ -5,10 +5,16 @@
 #include <windows.h> 
 #include "stdio.h"
 
+#include <ft2build.h>
+#include FT_FREETYPE_H 
+
 #include "TextEditor.h"
 #include "TextEditor_input.h"
+#include "TextEditor_font.h"
 
 global_variable Input input = {};
+
+global_variable FontChar fontChars[128];
 
 global_variable BITMAPINFO bitmapInfo;
 global_variable ScreenBuffer screenBuffer;
@@ -152,12 +158,47 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         return 0;
     }
 
+    //Init font stuff
+    FT_Library ft;
+    if (FT_Init_FreeType(&ft))
+    {
+        OutputDebugString(L"ERROR::FREETYPE: Could not init FreeType Library\n");
+        return -1;
+    }
+    FT_Face face;
+    if (FT_New_Face(ft, "fonts/consola.ttf", 0, &face))
+    {
+        OutputDebugString(L"ERROR::FREETYPE: Failed to load font\n");  
+        return -1;
+    }
+    FT_Set_Pixel_Sizes(face, 0, 48);  
+
+    for (uchar c = 0; c < 128; ++c)
+    {
+        FontChar fc;
+        if (FT_Load_Char(face, c, FT_LOAD_RENDER))
+        {
+            OutputDebugString(L"ERROR::FREETYTPE: Failed to load Glyph\n");
+            continue;
+        }
+
+        fc.width = face->glyph->bitmap.width;
+        fc.height = face->glyph->bitmap.rows;
+        fc.left = face->glyph->bitmap_left;
+        fc.top = face->glyph->bitmap_top;
+        fc.advance = face->glyph->advance.x;
+        fc.pixels = malloc(fc.width * fc.height); //Each byte refers to 1 pixel (8bpp)
+        memcpy(fc.pixels, face->glyph->bitmap.buffer, fc.width * fc.height);
+        fontChars[c] = fc;
+    }
+
+
     ShowWindow(hwnd, nCmdShow);
 
     // Run the message loop.
     running = true;
-    int xOffset = 0;
-    int yOffset = 0;
+    //int xOffset = 0;
+    //int yOffset = 0;
     while (running)
     { 
         for (int i = 0; i < NUM_INPUTS; ++i)
@@ -177,7 +218,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         wchar inputLog[64];
 
-        Draw(&screenBuffer, xOffset, yOffset);
+        Draw(&screenBuffer, fontChars, 0, 0);
         
         HDC hdc = GetDC(hwnd);
         RECT windowRect;
@@ -187,7 +228,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         win32_UpdateWindow(hdc, &windowRect, 0, 0, windowWidth, windowHeight);
         ReleaseDC(hwnd, hdc);
         
-        ++xOffset;
+        //++xOffset;
     }
     return 0;
 }
