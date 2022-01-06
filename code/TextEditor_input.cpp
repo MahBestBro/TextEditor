@@ -76,3 +76,40 @@ char* InputCodeToStr(InputCode code)
         default: return "NULL";
     }
 };
+
+char InputCodeToChar(InputCode code, bool shift)
+{
+    if (code == INPUTCODE_SPACE)
+        return ' ';
+    else if (code >= INPUTCODE_A && code <= INPUTCODE_Z)
+        return ((shift) ? 'A' : 'a') + (char)(code - INPUTCODE_A);  
+
+    switch (code)
+    {
+        case INPUTCODE_1: return (shift) ? '!' : '1';
+        case INPUTCODE_2: return (shift) ? '@' : '2';
+        case INPUTCODE_3: return (shift) ? '#' : '3';
+        case INPUTCODE_4: return (shift) ? '$' : '4';
+        case INPUTCODE_5: return (shift) ? '%' : '5';
+        case INPUTCODE_6: return (shift) ? '^' : '6';
+        case INPUTCODE_7: return (shift) ? '&' : '7';
+        case INPUTCODE_8: return (shift) ? '*' : '8';
+        case INPUTCODE_9: return (shift) ? '(' : '9';
+        case INPUTCODE_0: return (shift) ? ')' : '0';
+
+        case INPUTCODE_OPEN_SQ_BRACKET:   return (shift) ? '{' : '[';
+        case INPUTCODE_CLOSED_SQ_BRACKET: return (shift) ? '}' : ']';
+        case INPUTCODE_SEMICOLON:         return (shift) ? ':' : ';';
+        case INPUTCODE_QUOTE:             return (shift) ? '"' : '\'';
+        case INPUTCODE_COMMA:             return (shift) ? '<' : ',';
+        case INPUTCODE_PERIOD:            return (shift) ? '>' : '.';
+        case INPUTCODE_FORWARD_SLASH:     return (shift) ? '?' : '/';
+        
+        case INPUTCODE_BACK_SLASH: return (shift) ? '|' : '\\';
+        case INPUTCODE_MINUS:      return (shift) ? '_' : '-';
+        case INPUTCODE_EQUALS:     return (shift) ? '+' : '=';
+        case INPUTCODE_GRAVE:      return (shift) ? '~' : '`';
+    }
+
+    return 0;
+}
