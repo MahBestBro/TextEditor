@@ -8,6 +8,7 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H 
 
+#include "TextEditor_defs.h"
 #include "TextEditor.h"
 #include "TextEditor_input.h"
 #include "TextEditor_font.h"
@@ -61,6 +62,11 @@ internal void win32_ProcessInput()
 
 void win32_LogInput(InputCode code)
 {
+	if (InputDown(input.flags[code]))
+	{
+		Assert(true);
+	}
+
     wchar inputLog[32];
     wchar* codeStr = CStrToWStr(InputCodeToStr(code));
     if (code >= MOUSE_START && code < ARROWS_START)
@@ -126,6 +132,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, 
                     PWSTR pCmdLine, int nCmdShow)
 {
+    LARGE_INTEGER perfCountFreqResult;
+    QueryPerformanceFrequency(&perfCountFreqResult);
+    int64 perfCountFreq = perfCountFreqResult.QuadPart;
+
+
     // Register the window class.
     const wchar windowName[]  = L"TextEditorWindowClass";
     
@@ -166,12 +177,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         return -1;
     }
     FT_Face face;
-    if (FT_New_Face(ft, "fonts/consola.ttf", 0, &face))
+    if (FT_New_Face(ft, "fonts/consolab.ttf", 0, &face))
     {
         OutputDebugString(L"ERROR::FREETYPE: Failed to load font\n");  
         return -1;
     }
-    FT_Set_Pixel_Sizes(face, 0, 48);  
+    FT_Set_Pixel_Sizes(face, 0, 13);  
 
     for (uchar c = 0; c < 128; ++c)
     {
@@ -195,14 +206,24 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     ShowWindow(hwnd, nCmdShow);
 
-    // Run the message loop.
+
     running = true;
-    //int xOffset = 0;
-    //int yOffset = 0;
+    int64 prevCount = 0;
     while (running)
     { 
-        for (int i = 0; i < NUM_INPUTS; ++i)
-            win32_LogInput((InputCode)i);
+        LARGE_INTEGER currentCountResult;
+        QueryPerformanceCounter(&currentCountResult);
+        int64 currentCount = currentCountResult.QuadPart;
+        float deltaTime = (float)(currentCount - prevCount) / (float)perfCountFreq;
+        //int64 fps = perfCountFreq / (currentCount - prevCount);
+        prevCount = currentCount;
+
+        //wchar log[100];
+        //swprintf_s(log, L"dt: %fs, FPS: %lli\n", deltaTime, fps);
+        //OutputDebugString(log);
+
+        //for (int i = 0; i < NUM_INPUTS; ++i)
+        //    win32_LogInput((InputCode)i);
 
         win32_ProcessInput();
 
@@ -218,7 +239,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         wchar inputLog[64];
 
-        Draw(&screenBuffer, fontChars, 0, 0);
+        Draw(&screenBuffer, fontChars, &input, deltaTime);
         
         HDC hdc = GetDC(hwnd);
         RECT windowRect;
@@ -227,8 +248,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         int windowHeight = windowRect.bottom - windowRect.top;
         win32_UpdateWindow(hdc, &windowRect, 0, 0, windowWidth, windowHeight);
         ReleaseDC(hwnd, hdc);
-        
-        //++xOffset;
     }
     return 0;
 }
@@ -329,6 +348,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                 win32_HandleInputDown(&input.flags[INPUTCODE_OPEN_SQ_BRACKET]);
             else if (vkCode == VK_OEM_6)
                 win32_HandleInputDown(&input.flags[INPUTCODE_CLOSED_SQ_BRACKET]);
+            else if (vkCode == VK_OEM_1)
+                win32_HandleInputDown(&input.flags[INPUTCODE_SEMICOLON]);
             else if (vkCode == VK_OEM_COMMA) 
                 win32_HandleInputDown(&input.flags[INPUTCODE_COMMA]);
             else if (vkCode == VK_OEM_PERIOD) 
@@ -377,6 +398,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                 win32_HandleInputUp(&input.flags[INPUTCODE_OPEN_SQ_BRACKET]);
             else if (vkCode == VK_OEM_6)
                 win32_HandleInputUp(&input.flags[INPUTCODE_CLOSED_SQ_BRACKET]);
+            else if (vkCode == VK_OEM_1)
+                win32_HandleInputUp(&input.flags[INPUTCODE_SEMICOLON]);
             else if (vkCode == VK_OEM_COMMA) 
                 win32_HandleInputUp(&input.flags[INPUTCODE_COMMA]);
             else if (vkCode == VK_OEM_PERIOD) 
