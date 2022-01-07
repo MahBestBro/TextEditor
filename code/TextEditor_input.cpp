@@ -77,12 +77,18 @@ char* InputCodeToStr(InputCode code)
     }
 };
 
-char InputCodeToChar(InputCode code, bool shift)
+char InputCodeToChar(InputCode code, bool shift, bool caps)
 {
+    if (shift) caps = true;
+
     if (code == INPUTCODE_SPACE)
         return ' ';
+    else if (code == INPUTCODE_ENTER)
+        return '\n';
+    else if (code == INPUTCODE_TAB)
+        return (shift) ? 0 : '\t';
     else if (code >= INPUTCODE_A && code <= INPUTCODE_Z)
-        return ((shift) ? 'A' : 'a') + (char)(code - INPUTCODE_A);  
+        return ((caps) ? 'A' : 'a') + (char)(code - INPUTCODE_A);  
 
     switch (code)
     {
