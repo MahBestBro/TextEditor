@@ -19,13 +19,14 @@ enum InputCode
     INPUTCODE_DOWN,
 
     INPUTCODE_BACKSPACE,
-    INPUTCODE_ENTER,
     INPUTCODE_LSHIFT,
-    INPUTCODE_TAB,
     INPUTCODE_LCTRL,
     INPUTCODE_LALT,
     INPUTCODE_CAPSLOCK,
+    
     INPUTCODE_SPACE,
+    INPUTCODE_TAB,
+    INPUTCODE_ENTER,
 
     INPUTCODE_A,
     INPUTCODE_B,
@@ -111,13 +112,14 @@ union Input
         };  
 
         byte backspace;
-        byte enter;
         byte leftShift;
-        byte tab;
         byte leftCtrl;
         byte leftAlt;
         byte capsLock;
+
         byte space;
+        byte tab;
+        byte enter;
 
         byte letterKeys[26];
         byte numberKeys[10];
@@ -132,7 +134,7 @@ union Input
 };
 
 char* InputCodeToStr(InputCode code);
-char InputCodeToChar(InputCode code, bool shift);
+char InputCodeToChar(InputCode code, bool shift, bool caps);
 
 inline bool InputDown(byte inputFlags)
 {
