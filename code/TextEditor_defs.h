@@ -10,6 +10,7 @@
 #define Assert(cond) if (!(cond)) {*(int*)0 = 0;}
 
 #define PIXEL_IN_BYTES 4
+#define FONT_SIZE 13
 
 typedef uint8_t byte;
 typedef uint8_t uchar;
