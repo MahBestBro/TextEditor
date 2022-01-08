@@ -1,0 +1,17 @@
+This is in order of when to do them, so try to do whatever the first point is.
+
+FEATURES:
+    - Have cursor go up and down (Reliant on line system)
+    - Show line nums (Reliant on line system?)
+    - Have lines positioned properly on screen (Reliant on line system?)
+    - Syntax highlighting
+    - Load and save file
+    - UI?
+
+PROGRAMMING/REFACTORING:
+    - Implement Line System
+        - Create a "Line" struct that stores line number and string with text in that line
+        - Store all lines in an array (maybe global)
+    
+    - Refactor timed events, make them neater and more flexibe if possible?
+    
