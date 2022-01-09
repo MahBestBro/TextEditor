@@ -29,9 +29,9 @@ struct TimedEvent
 void HandleTimedEvent(TimedEvent* timedEvent, float dt, TimedEvent* nestedEvent)
 {
     timedEvent->elapsedTime += dt;
-    if (timedEvent->OnTrigger) timedEvent->OnTrigger(); //May not be needed???
     if (timedEvent->elapsedTime >= timedEvent->interval)
     {
+        if (timedEvent->OnTrigger) timedEvent->OnTrigger(); //May not be needed???
         if (nestedEvent)
         {
             nestedEvent->elapsedTime += dt;
@@ -44,15 +44,14 @@ void HandleTimedEvent(TimedEvent* timedEvent, float dt, TimedEvent* nestedEvent)
     }
 }
 
-
 void DrawRect(ScreenBuffer* screenBuffer, Rect rect, byte r, byte g, byte b)
 {
     Assert(rect.left < screenBuffer->width && rect.right <= screenBuffer->width);
     Assert(rect.left >= 0 && rect.right >= 0);
     Assert(rect.bottom < screenBuffer->height && rect.top <= screenBuffer->height);
     Assert(rect.top >= 0 && rect.bottom >= 0);
-    Assert(rect.left < rect.right);
-    Assert(rect.bottom < rect.top);
+    Assert(rect.left <= rect.right);
+    Assert(rect.bottom <= rect.top);
 
     int drawWidth = rect.right - rect.left;
     int drawHeight = rect.top - rect.bottom;
@@ -83,8 +82,8 @@ void Draw8bppPixels(ScreenBuffer* screenBuffer, Rect rect, byte* pixels)
     Assert(rect.left >= 0 && rect.right >= 0);
     Assert(rect.bottom < screenBuffer->height && rect.top <= screenBuffer->height);
     Assert(rect.top >= 0 && rect.bottom >= 0);
-    Assert(rect.left < rect.right);
-    Assert(rect.bottom < rect.top);
+    Assert(rect.left <= rect.right);
+    Assert(rect.bottom <= rect.top);
 
     int drawWidth = rect.right - rect.left;
     int drawHeight = rect.top - rect.bottom;
@@ -233,12 +232,9 @@ void RemoveChar()
 TimedEvent cursorBlink = {0.0f, 0.5f, 0};
 TimedEvent holdChar = {0.0f, 0.5f, 0};
 TimedEvent repeatChar = {0.0f, 0.02f, &AddChar};
-TimedEvent holdBackspace = {0.0f, 0.5f, 0};
-TimedEvent repeatBackspace = {0.0f, 0.02f, &RemoveChar};
-TimedEvent holdRight = {0.0f, 0.5f, 0};
-TimedEvent repeatRight = {0.0f, 0.02f, &MoveCursorForward};
-TimedEvent holdLeft = {0.0f, 0.5f, 0};
-TimedEvent repeatLeft = {0.0f, 0.02f, &MoveCursorBackward};
+
+TimedEvent holdAction = {0.0f, 0.5f, 0};
+TimedEvent repeatAction = {0.0, 0.02f, 0};
 
 bool capslockOn = false;
 
@@ -264,6 +260,7 @@ void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, flo
 
     if (charKeyPressed)
     {
+        //TODO: fix bug where changing character does not stop repeat
         HandleTimedEvent(&holdChar, dt, &repeatChar);
     }
     else
@@ -271,29 +268,32 @@ void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, flo
         holdChar.elapsedTime = 0.0f;
 
         if (InputDown(input->backspace))
+        {
             RemoveChar();
-        else if (InputHeld(input->backspace))
-            HandleTimedEvent(&holdBackspace, dt, &repeatBackspace);  
-        else 
-            holdBackspace.elapsedTime = 0.0f;
+            repeatAction.OnTrigger = RemoveChar;
+			holdAction.elapsedTime = 0.0f;
+        }
+        else if (InputDown(input->right))
+        {
+            MoveCursorForward();
+            repeatAction.OnTrigger = MoveCursorForward;
+			holdAction.elapsedTime = 0.0f;
+        }
+        else if (InputDown(input->left))
+        {
+            MoveCursorBackward();
+            repeatAction.OnTrigger = MoveCursorBackward;
+			holdAction.elapsedTime = 0.0f;
+        }
+        
+
+        if (InputHeld(input->backspace) || InputHeld(input->right) || InputHeld(input->left))
+            HandleTimedEvent(&holdAction, dt, &repeatAction);
+        else
+            holdAction.elapsedTime = 0.0f;
 
         if (InputDown(input->capsLock))
             capslockOn = !capslockOn;
-
-        if (InputDown(input->right))
-            MoveCursorForward();
-        else if (InputHeld(input->right))
-            HandleTimedEvent(&holdRight, dt, &repeatRight);
-        else
-            holdRight.elapsedTime = 0.0f;
-
-        if (InputDown(input->left))
-            MoveCursorBackward();
-        else if (InputHeld(input->left))
-            HandleTimedEvent(&holdLeft, dt, &repeatLeft);
-        else
-            holdLeft.elapsedTime = 0.0f;
-
 
     }
 
