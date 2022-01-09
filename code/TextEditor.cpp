@@ -3,13 +3,6 @@
 #include "TextEditor.h"
 #include "TextEditor_input.h"
 
-struct TimedEvent
-{
-    float elapsedTime;
-    float interval;
-    void (*OnTrigger)(void);
-};
-
 struct IntPair
 {
     int x, y;
@@ -18,6 +11,19 @@ struct IntPair
 struct Rect
 {
     int left, right, bottom, top;
+};
+
+struct Line
+{
+    char* text;
+    int len;
+};
+
+struct TimedEvent
+{
+    float elapsedTime;
+    float interval;
+    void (*OnTrigger)(void);
 };
 
 void HandleTimedEvent(TimedEvent* timedEvent, float dt, TimedEvent* nestedEvent)
@@ -185,6 +191,7 @@ char text[256];
 int numChars = 0;
 
 int cursorTextIndex = 0;
+int cursorLineIndex = 0;
 
 void MoveCursorForward()
 {
@@ -198,16 +205,29 @@ void MoveCursorBackward()
 
 void AddChar()
 {
-    text[numChars] = currentChar;
-    numChars += (numChars < 255);
-    cursorTextIndex += (numChars < 255);
+    if (numChars < 255)
+    {
+        numChars++;
+        //Shift right
+        for (int i = numChars - 1; i > cursorTextIndex + 1; --i)
+            text[i] = text[i-1];
+        text[cursorTextIndex] = currentChar;
+        cursorTextIndex++;
+    }
 }
 
 void RemoveChar()
 {
-    numChars -= (numChars > 0);
-    text[numChars] = 0;
-    cursorTextIndex -= (numChars > 0);
+    if (cursorTextIndex > 0)
+    {
+		numChars--;
+		for (int i = cursorTextIndex - 1; i < numChars; ++i)
+		{
+			text[i] = text[i+1];
+		}
+        text[numChars] = 0;
+        cursorTextIndex--;
+    }
 }
 
 TimedEvent cursorBlink = {0.0f, 0.5f, 0};
@@ -312,6 +332,7 @@ void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, flo
     }
     else
     {
+        if (cursorMoving) cursorBlink.elapsedTime = 0.0f;
         //Draw Cursor
         const int cursorWidth = 2;
         const int cursorHeight = 13;
