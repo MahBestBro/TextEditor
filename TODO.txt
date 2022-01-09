@@ -4,7 +4,9 @@ FEATURES:
     - Have cursor go up and down (Reliant on line system)
     - Show line nums (Reliant on line system?)
     - Have lines positioned properly on screen (Reliant on line system?)
+    - Cursor highlighting
     - Syntax highlighting
+    - Ctrl and Alt commands
     - Load and save file
     - UI?
 
