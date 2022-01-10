@@ -5,9 +5,10 @@ FEATURES:
     - Show line nums (Reliant on line system?)
     - Have lines positioned properly on screen (Reliant on line system?)
     - Cursor highlighting
+    - Offscreen text
     - Syntax highlighting
-    - Ctrl and Alt commands
     - Load and save file
+    - have brackets and quotes come in pairs
     - UI?
 
 PROGRAMMING/REFACTORING:
