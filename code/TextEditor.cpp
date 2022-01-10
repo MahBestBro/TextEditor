@@ -206,12 +206,25 @@ void AddChar()
 {
     if (numChars < 255)
     {
-        numChars++;
+        numChars += (currentChar == '\t') ? 4 : 1;
+        
         //Shift right
-        for (int i = numChars - 1; i > cursorTextIndex + 1; --i)
+        int offset = 4 * (currentChar == '\t');
+        for (int i = numChars - 1; i > cursorTextIndex + offset; --i)
             text[i] = text[i-1];
-        text[cursorTextIndex] = currentChar;
+        
+        //Add character(s) and advance cursor
+        text[cursorTextIndex] = (currentChar == '\t') ? ' ' : currentChar;
         cursorTextIndex++;
+        if (currentChar == '\t')
+        {
+            for (int _ = 0; _ < 3; ++_)
+            {
+                text[cursorTextIndex] = (currentChar == '\t') ? ' ' : currentChar;
+                cursorTextIndex++;
+            }
+        }
+        
     }
 }
 
@@ -229,6 +242,7 @@ void RemoveChar()
     }
 }
 
+
 TimedEvent cursorBlink = {0.0f, 0.5f, 0};
 TimedEvent holdChar = {0.0f, 0.5f, 0};
 TimedEvent repeatChar = {0.0f, 0.02f, &AddChar};
@@ -237,30 +251,46 @@ TimedEvent holdAction = {0.0f, 0.5f, 0};
 TimedEvent repeatAction = {0.0, 0.02f, 0};
 
 bool capslockOn = false;
-
-
+bool nonCharKeyPressed = false;
 
 void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, float dt)
 {
+    //Detect key input and handle char input
     bool charKeyPressed = false;
-    for (int code = (int)INPUTCODE_SPACE; code < (int)NUM_INPUTS; ++code)
+    bool newCharKeyPressed = false;
+    for (int code = (int)KEYS_START; code < (int)NUM_INPUTS; ++code)
     {
-        if (InputDown(input->flags[code]))
+        if (code >= (int)CHAR_KEYS_START)
         {
-            char charOfKeyPressed = InputCodeToChar(
-                (InputCode)code, 
-                InputHeld(input->leftShift), 
-                capslockOn);
-            currentChar = charOfKeyPressed;
-            AddChar();
-        }
-        else if (InputHeld(input->flags[code]))
-            charKeyPressed = true;
-    }
+            if (InputDown(input->flags[code]))
+            {
+                char charOfKeyPressed = InputCodeToChar(
+                    (InputCode)code, 
+                    InputHeld(input->leftShift), 
+                    capslockOn);
+                currentChar = charOfKeyPressed;
+                AddChar();
 
-    if (charKeyPressed)
+                if (charKeyPressed)
+                    newCharKeyPressed = true;
+                nonCharKeyPressed = false;
+            }
+            else if (InputHeld(input->flags[code]))
+                charKeyPressed = true;
+        }
+        else
+        {
+            if (InputDown(input->flags[code]))
+                nonCharKeyPressed = true;
+        }
+        
+    }
+    
+    //Handle non char input and trigger timed events
+    if (charKeyPressed && !nonCharKeyPressed)
     {
-        //TODO: fix bug where changing character does not stop repeat
+        if (newCharKeyPressed)
+            holdChar.elapsedTime = 0.0f;
         HandleTimedEvent(&holdChar, dt, &repeatChar);
     }
     else
@@ -312,15 +342,14 @@ void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, flo
         else if (text[i] == '\t')
         {
             FontChar spaceGlyph = fontChars[' '];
-            cursorPos.x -= spaceGlyph.width;
+            cursorPos.x -= (spaceGlyph.advance / 64) * 4;
         }
         else
         {
             FontChar fc = fontChars[text[i]];
-            cursorPos.x -= fc.width;
+            cursorPos.x -= fc.advance / 64;
         }
-    }
-    
+    }    
 
     cursorBlink.elapsedTime += dt;
     bool cursorMoving = charKeyPressed || InputHeld(input->backspace) || ArrowKeysHeld(input->arrowKeys);
