@@ -18,6 +18,14 @@ struct FontChar
     void* pixels;
 };
 
+inline int StringLen(const char* string)
+{
+    int result = 0;
+    for (; string[0]; string++)
+        result++;
+    return result;
+}
+
 void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, float dt);
 
 #endif
