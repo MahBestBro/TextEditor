@@ -9,6 +9,8 @@
 
 #define Assert(cond) if (!(cond)) {*(int*)0 = 0;}
 
+#define ArrayLen(arr) sizeof((arr)) / sizeof((arr)[0])
+
 #define PIXEL_IN_BYTES 4
 #define FONT_SIZE 13
 
