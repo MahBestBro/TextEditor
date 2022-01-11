@@ -23,10 +23,10 @@ enum InputCode
     INPUTCODE_LCTRL,
     INPUTCODE_LALT,
     INPUTCODE_CAPSLOCK,
-    
+    INPUTCODE_ENTER,
+
     INPUTCODE_SPACE,
     INPUTCODE_TAB,
-    INPUTCODE_ENTER,
 
     INPUTCODE_A,
     INPUTCODE_B,
@@ -83,7 +83,9 @@ enum InputCode
 };
 
 #define MOUSE_START INPUTCODE_LEFT_MOUSE
+#define KEYS_START INPUTCODE_LEFT
 #define ARROWS_START INPUTCODE_LEFT
+#define CHAR_KEYS_START INPUTCODE_SPACE
 #define NON_SHIFT_START INPUTCODE_BACKSPACE
 #define SHIFT_START INPUTCODE_A
 #define LETTER_START INPUTCODE_A
@@ -116,10 +118,10 @@ union Input
         byte leftCtrl;
         byte leftAlt;
         byte capsLock;
+        byte enter;
 
         byte space;
         byte tab;
-        byte enter;
 
         byte letterKeys[26];
         byte numberKeys[10];
@@ -149,6 +151,20 @@ inline bool InputUp(byte inputFlags)
 inline bool InputHeld(byte inputFlags)
 {
     return (inputFlags & INPUT_HELD) == INPUT_HELD;
+}
+
+inline bool ArrowKeysHeld(byte* arrowKeyFlags)
+{
+    bool result = false;
+    for (int i = 0; i < 4; ++i)
+    {
+        if (InputHeld(arrowKeyFlags[i]))
+        {
+            result = true;
+            break;
+        }
+    }
+    return result;
 }
 
 #endif
