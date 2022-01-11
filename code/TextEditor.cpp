@@ -3,6 +3,9 @@
 #include "TextEditor.h"
 #include "TextEditor_input.h"
 
+#define INITIAL_LINE_SIZE 128
+#define CURSOR_HEIGHT 13
+
 struct IntPair
 {
     int x, y;
@@ -16,8 +19,28 @@ struct Rect
 struct Line
 {
     char* text;
+    int size;
     int len;
+    bool changed;
 };
+
+Line InitLine(const char* text = NULL)
+{
+    Line result;
+	result.size = INITIAL_LINE_SIZE;
+    result.text = (char*)malloc(result.size);
+    if (text)
+    {
+        result.len = StringLen(text);
+        memcpy(result.text, text, result.len);
+    }
+    else
+    {
+        result.len = 0;
+    }
+    result.text[result.len] = 0;
+    return result;  
+}
 
 struct TimedEvent
 {
@@ -156,71 +179,78 @@ IntPair DrawText(ScreenBuffer* screenBuffer, FontChar fontChars[128], char* text
 	return {xAdvance, -yAdvance};
 }
 
-void DrawCursor(ScreenBuffer* screenBuffer, int xCoord, int yCoord)
-{
-    int cursorWidth = 2;
-    int cursorHeight = 13;
-
-    int xPos = xCoord;
-    int yPos = (yCoord * screenBuffer->width);
-
-    byte* row = (byte*)screenBuffer->memory + (xPos + yPos) * PIXEL_IN_BYTES;
-    for (int y = 0; y < cursorHeight; ++y)
-    {
-        byte* pixel = row;
-        for (int x = 0; x < cursorWidth; ++x)
-        {
-            *pixel = 0;
-            pixel++;
-            *pixel = 255;
-            pixel++;
-            *pixel = 0;
-            pixel++;
-            *pixel = 0;
-            pixel++;
-        }
-
-        row += screenBuffer->width * PIXEL_IN_BYTES;
-    } 
-}
-
 char currentChar = 0;
-//TODO: Make this dynamic (or change into lines)
-char text[256];
-int numChars = 0;
+const int MAX_LINES = 256;
+Line fileText[MAX_LINES];
+int numLines = 1;
+bool textInitialised = false;
 
 int cursorTextIndex = 0;
 int cursorLineIndex = 0;
 
 void MoveCursorForward()
 {
-    cursorTextIndex += (cursorTextIndex < numChars);
+    if (cursorTextIndex < fileText[cursorLineIndex].len)
+    {
+        cursorTextIndex++;
+    }
+    else if (cursorLineIndex < numLines - 1)
+    {
+        //Go down a line
+        cursorLineIndex++;
+        cursorTextIndex = 0;
+    }
 }
 
 void MoveCursorBackward()
 {
-    cursorTextIndex -= (cursorTextIndex > 0);
+    if (cursorTextIndex > 0)
+    {
+        cursorTextIndex--;
+    }
+    else if (cursorLineIndex > 0)
+    {
+        //Go up a line
+        cursorLineIndex--;
+        cursorTextIndex = fileText[cursorLineIndex].len;
+    }
 }
+
+void MoveCursorUp()
+{
+    cursorLineIndex -= (cursorLineIndex > 0);
+    cursorTextIndex = min(cursorTextIndex, fileText[cursorLineIndex].len);
+}
+
+void MoveCursorDown()
+{
+    cursorLineIndex += (cursorLineIndex < numLines);
+    cursorTextIndex = min(cursorTextIndex, fileText[cursorLineIndex].len);
+}
+
 
 void AddChar()
 {
-    if (numChars < 255)
-    {
-        numChars += (currentChar == '\t') ? 4 : 1;
+    Line* line = &fileText[cursorLineIndex];
+    if (line->len < INITIAL_LINE_SIZE)
+    {  
+        line->len += (currentChar == '\t') ? 4 : 1;
         
         //Shift right
         int offset = 4 * (currentChar == '\t');
-        for (int i = numChars - 1; i > cursorTextIndex + offset; --i)
-            text[i] = text[i-1];
+        for (int i = line->len - 1; i > cursorTextIndex + offset; --i)
+            line->text[i] = line->text[i-1];
         
         //Add character(s) and advance cursor
-        text[cursorTextIndex] = (currentChar == '\t') ? ' ' : currentChar;
+        //TODO: realloc line.text if line.len >= line.size
+        line->text[cursorTextIndex] = (currentChar == '\t') ? ' ' : currentChar;
+		line->text[line->len] = 0;
         cursorTextIndex++;
         if (currentChar == '\t')
         {
             for (int _ = 0; _ < 3; ++_)
             {
-                text[cursorTextIndex] = (currentChar == '\t') ? ' ' : currentChar;
+                line->text[cursorTextIndex] = (currentChar == '\t') ? ' ' : currentChar;
                 cursorTextIndex++;
             }
         }
@@ -230,15 +260,47 @@ void AddChar()
 
 void RemoveChar()
 {
+	//TODO: Fix bug where previous lines are deleted from existance
+    Line* line = &fileText[cursorLineIndex];
     if (cursorTextIndex > 0)
     {
-		numChars--;
-		for (int i = cursorTextIndex - 1; i < numChars; ++i)
+		line->len--;
+		for (int i = cursorTextIndex - 1; i < line->len; ++i)
 		{
-			text[i] = text[i+1];
+			line->text[i] = line->text[i+1];
 		}
-        text[numChars] = 0;
+        line->text[line->len] = 0;
         cursorTextIndex--;
+    }
+    else
+    {
+        if (numLines > 1)
+        {
+            cursorLineIndex--;
+            numLines--;
+            cursorTextIndex = fileText[cursorLineIndex].len;
+        }
+    }
+}
+
+void AddLine()
+{
+    if (numLines < MAX_LINES)
+    {
+        int prevLineIndex = cursorLineIndex;
+        cursorLineIndex++;
+        int copiedLen = fileText[prevLineIndex].len - cursorTextIndex;
+        memcpy(
+            fileText[cursorLineIndex].text, 
+            fileText[prevLineIndex].text + cursorTextIndex, 
+            copiedLen
+        );
+        fileText[prevLineIndex].len -= copiedLen;
+        fileText[prevLineIndex].text[cursorTextIndex] = 0;
+        fileText[cursorLineIndex].len = copiedLen;
+        fileText[cursorLineIndex].text[fileText[prevLineIndex].len] = 0;
+        cursorTextIndex = 0;
+        numLines++;
     }
 }
 
@@ -255,6 +317,13 @@ bool nonCharKeyPressed = false;
 
 void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, float dt)
 {
+    if (!textInitialised)
+    {
+        for (int i = 0; i < MAX_LINES; ++i)
+            fileText[i] = InitLine();
+		textInitialised = true;
+    }
+
     //Detect key input and handle char input
     bool charKeyPressed = false;
     bool newCharKeyPressed = false;
@@ -297,27 +366,42 @@ void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, flo
     {
         holdChar.elapsedTime = 0.0f;
 
-        if (InputDown(input->backspace))
+        byte inputFlags[] = 
         {
-            RemoveChar();
-            repeatAction.OnTrigger = RemoveChar;
-			holdAction.elapsedTime = 0.0f;
-        }
-        else if (InputDown(input->right))
-        {
-            MoveCursorForward();
-            repeatAction.OnTrigger = MoveCursorForward;
-			holdAction.elapsedTime = 0.0f;
-        }
-        else if (InputDown(input->left))
-        {
-            MoveCursorBackward();
-            repeatAction.OnTrigger = MoveCursorBackward;
-			holdAction.elapsedTime = 0.0f;
-        }
-        
+            input->enter,
+            input->backspace,
+            input->right,
+            input->left,
+            input->up,
+            input->down,
+        };
 
-        if (InputHeld(input->backspace) || InputHeld(input->right) || InputHeld(input->left))
+        void (*inputCallbacks[])(void) = 
+        {
+            AddLine, 
+            RemoveChar, 
+            MoveCursorForward, 
+            MoveCursorBackward, 
+            MoveCursorUp, 
+            MoveCursorDown, 
+        };
+
+        bool inputHeld = false;
+        for (int i = 0; i < ArrayLen(inputFlags); ++i)
+        {
+            if (InputDown(inputFlags[i]))
+            {
+                repeatAction.OnTrigger = inputCallbacks[i];
+                inputCallbacks[i]();
+                holdAction.elapsedTime = 0.0f;
+            }
+            else if (InputHeld(inputFlags[i]))
+            {
+                inputHeld = true;
+            }
+        } 
+
+        if (inputHeld)
             HandleTimedEvent(&holdAction, dt, &repeatAction);
         else
             holdAction.elapsedTime = 0.0f;
@@ -331,25 +415,19 @@ void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, flo
     Rect screenDims = {0, screenBuffer->width, 0, screenBuffer->height};
     DrawRect(screenBuffer, screenDims, 255, 255, 255);
     
-    //Draw text and get correct position for cursor
-    IntPair cursorPos = DrawText(screenBuffer, fontChars, text, 25, 300);
-    for (int i = numChars - 1; i >= cursorTextIndex; --i)
+    //Draw text
+    IntPair start = {26, 600}; 
+    for (int i = 0; i < numLines; ++i)
     {
-        if (text[i] == '\n')
-        {
-            //Okay we're probably gonna need a line system to do this
-        }
-        else if (text[i] == '\t')
-        {
-            FontChar spaceGlyph = fontChars[' '];
-            cursorPos.x -= (spaceGlyph.advance / 64) * 4;
-        }
-        else
-        {
-            FontChar fc = fontChars[text[i]];
-            cursorPos.x -= fc.advance / 64;
-        }
-    }    
+        DrawText(screenBuffer, fontChars, fileText[i].text, 
+                 start.x, start.y - i * CURSOR_HEIGHT);
+    }
+
+    //Get correct position for cursor
+    IntPair cursorPos = start;
+    for (int i = 0; i < cursorTextIndex; ++i)
+        cursorPos.x += fontChars[fileText[cursorLineIndex].text[i]].advance / 64;
+    cursorPos.y -= cursorLineIndex * CURSOR_HEIGHT;    
 
     cursorBlink.elapsedTime += dt;
     bool cursorMoving = charKeyPressed || InputHeld(input->backspace) || ArrowKeysHeld(input->arrowKeys);
@@ -363,11 +441,9 @@ void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, flo
     {
         if (cursorMoving) cursorBlink.elapsedTime = 0.0f;
         //Draw Cursor
-        const int cursorWidth = 2;
-        const int cursorHeight = 13;
-        int cursorX = 25 + cursorPos.x; 
-        int cursorY = 300 + cursorPos.y;
-        Rect cursorDims = {cursorX, cursorX + cursorWidth, cursorY, cursorY + cursorHeight};
+        const int CURSOR_WIDTH = 2;
+        Rect cursorDims = {cursorPos.x, cursorPos.x + CURSOR_WIDTH, 
+                           cursorPos.y, cursorPos.y + CURSOR_HEIGHT};
         DrawRect(screenBuffer, cursorDims, 0, 255, 0);
     }
 }
