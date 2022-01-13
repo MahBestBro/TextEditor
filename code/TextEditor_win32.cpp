@@ -11,14 +11,12 @@
 #include "TextEditor_defs.h"
 #include "TextEditor.h"
 #include "TextEditor_input.h"
-#include "TextEditor_font.h"
 
-global_variable Input input = {};
-
-global_variable FontChar fontChars[128];
+Input input = {};
+FontChar fontChars[128];
+ScreenBuffer screenBuffer;
 
 global_variable BITMAPINFO bitmapInfo;
-global_variable ScreenBuffer screenBuffer;
 global_variable bool running;
 
 wchar* CStrToWStr(const char *c)
@@ -182,7 +180,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         OutputDebugString(L"ERROR::FREETYPE: Failed to load font\n");  
         return -1;
     }
-    FT_Set_Pixel_Sizes(face, 0, 13);  
+    FT_Set_Pixel_Sizes(face, 0, FONT_SIZE);  
 
     for (uchar c = 0; c < 128; ++c)
     {
@@ -203,9 +201,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         fontChars[c] = fc;
     }
 
-
     ShowWindow(hwnd, nCmdShow);
-
 
     running = true;
     int64 prevCount = 0;
@@ -239,7 +235,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         wchar inputLog[64];
 
-        Draw(&screenBuffer, fontChars, &input, deltaTime);
+        Draw(deltaTime);
         
         HDC hdc = GetDC(hwnd);
         RECT windowRect;
