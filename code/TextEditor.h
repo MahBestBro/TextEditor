@@ -26,6 +26,6 @@ inline int StringLen(const char* string)
     return result;
 }
 
-void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, float dt);
+void Draw(float dt);
 
 #endif
