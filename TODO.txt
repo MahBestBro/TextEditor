@@ -4,7 +4,7 @@ FEATURES:
     - Have lines positioned properly on screen 
     - Cursor highlighting
     - Commands (e.g., ctrl + c, ctrl + v. Some of these are reliant on cursor highlighting)
-    - Offscreen text
+    - Smooth Offscreen text
     - Syntax highlighting
     - Load and save file
     - Have brackets and quotes come in pairs
@@ -12,4 +12,6 @@ FEATURES:
     - UI?
 
 PROGRAMMING/REFACTORING:
+    - Set advances to pixels instead of 64th pixels
     - Refactor timed events, make them neater and more flexibe if possible?
+    
