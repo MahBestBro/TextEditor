@@ -3,8 +3,12 @@
 #include "TextEditor.h"
 #include "TextEditor_input.h"
 
-#define INITIAL_LINE_SIZE 128
+#define INITIAL_LINE_SIZE 256
 #define CURSOR_HEIGHT 18
+
+extern Input input;
+extern FontChar fontChars[128];
+extern ScreenBuffer screenBuffer;
 
 struct IntPair
 {
@@ -94,20 +98,21 @@ void IntToString(int val, char* buffer)
     buffer[len] = 0;
 }
 
-void DrawRect(ScreenBuffer* screenBuffer, Rect rect, Colour colour)
+void DrawRect(Rect rect, Colour colour)
 {
-    Assert(rect.left < screenBuffer->width && rect.right <= screenBuffer->width);
-    Assert(rect.left >= 0 && rect.right >= 0);
-    Assert(rect.bottom < screenBuffer->height && rect.top <= screenBuffer->height);
-    Assert(rect.top >= 0 && rect.bottom >= 0);
     Assert(rect.left <= rect.right);
     Assert(rect.bottom <= rect.top);
+
+    rect.left   = Clamp(rect.left,   0, screenBuffer.width);
+    rect.right  = Clamp(rect.right,  0, screenBuffer.width);
+    rect.bottom = Clamp(rect.bottom, 0, screenBuffer.height);
+    rect.top    = Clamp(rect.top,    0, screenBuffer.height);
 
     int drawWidth = rect.right - rect.left;
     int drawHeight = rect.top - rect.bottom;
 
-    int start = (rect.left + rect.bottom * screenBuffer->width) * PIXEL_IN_BYTES;
-	byte* row = (byte*)screenBuffer->memory + start;
+    int start = (rect.left + rect.bottom * screenBuffer.width) * PIXEL_IN_BYTES;
+	byte* row = (byte*)screenBuffer.memory + start;
 	for (int y = 0; y < drawHeight; ++y)
     {
         byte* pixel = row;
@@ -122,24 +127,30 @@ void DrawRect(ScreenBuffer* screenBuffer, Rect rect, Colour colour)
             *pixel = 0;
             pixel++;
         }
-		row += screenBuffer->width * PIXEL_IN_BYTES;
+		row += screenBuffer.width * PIXEL_IN_BYTES;
     }
 }
 
-void Draw8bppPixels(ScreenBuffer* screenBuffer, Rect rect, byte* pixels, Colour colour)
+void Draw8bppPixels(Rect rect, byte* pixels, Colour colour,
+                    int xCutoff, int yCutoff)
 {
-    Assert(rect.left < screenBuffer->width && rect.right <= screenBuffer->width);
-    Assert(rect.left >= 0 && rect.right >= 0);
-    Assert(rect.bottom < screenBuffer->height && rect.top <= screenBuffer->height);
-    Assert(rect.top >= 0 && rect.bottom >= 0);
+    //Assert(rect.left < screenBuffer.width && rect.right <= screenBuffer.width);
+    //Assert(rect.left >= 0 && rect.right >= 0);
+    //Assert(rect.bottom < screenBuffer.height && rect.top <= screenBuffer.height);
+    //Assert(rect.top >= 0 && rect.bottom >= 0);
     Assert(rect.left <= rect.right);
     Assert(rect.bottom <= rect.top);
+
+    rect.left   = Clamp(rect.left,   xCutoff, screenBuffer.width);
+    rect.right  = Clamp(rect.right,  xCutoff, screenBuffer.width);
+    rect.bottom = Clamp(rect.bottom, yCutoff, screenBuffer.height);
+    rect.top    = Clamp(rect.top,    yCutoff, screenBuffer.height);
 
     int drawWidth = rect.right - rect.left;
     int drawHeight = rect.top - rect.bottom;
 
-    int start = (rect.left + rect.bottom * screenBuffer->width) * PIXEL_IN_BYTES;
-	byte* row = (byte*)screenBuffer->memory + start;
+    int start = (rect.left + rect.bottom * screenBuffer.width) * PIXEL_IN_BYTES;
+	byte* row = (byte*)screenBuffer.memory + start;
 	for (int y = drawHeight - 1; y >= 0; --y)
     {
         byte* pixel = row;
@@ -158,27 +169,19 @@ void Draw8bppPixels(ScreenBuffer* screenBuffer, Rect rect, byte* pixels, Colour 
             *pixel = 0;
             pixel++;
         }
-		row += screenBuffer->width * PIXEL_IN_BYTES;
+		row += screenBuffer.width * PIXEL_IN_BYTES;
     }
 }
 
-IntPair DrawText(ScreenBuffer* screenBuffer, FontChar fontChars[128], char* text, 
-                 int xCoord, int yCoord, Colour colour)
+//TODO: Fix bug where w's and v's glitch at edge of screen (my guess is the width > the advance)
+void DrawText(char* text, int xCoord, int yCoord, Colour colour, int xCutoff = 0, int yCutoff = 0)
 {
-    Assert(xCoord > 0 && xCoord <= screenBuffer->width);
-    Assert(yCoord > 0 && yCoord <= screenBuffer->height);
-
-    char* at = text;
+    char* at = text; 
 	int xAdvance = 0;
     int yAdvance = 0;
     for (; at[0]; at++)
     {
-		if (at[0] == '\n')
-        {
-            yAdvance += FONT_SIZE;
-            xAdvance = 0;
-        }
-        else if (at[0] == '\t')
+        if (at[0] == '\t')
         {
             FontChar fc = fontChars[' '];
             int xOffset = fc.left + xAdvance + xCoord;
@@ -188,7 +191,7 @@ IntPair DrawText(ScreenBuffer* screenBuffer, FontChar fontChars[128], char* text
             //TODO: change this so that it aligns with tabs
             for (int _ = 0; _ < 4; ++_)
             {
-                Draw8bppPixels(screenBuffer, charDims, (byte*)fc.pixels, colour);
+                Draw8bppPixels(charDims, (byte*)fc.pixels, colour, xCutoff, yCutoff);
                 xOffset += fc.left;
             }
             xAdvance += 4 * (fc.advance / 64);
@@ -200,13 +203,11 @@ IntPair DrawText(ScreenBuffer* screenBuffer, FontChar fontChars[128], char* text
             int yOffset = yCoord - (fc.height - fc.top) - yAdvance;
             Rect charDims = {xOffset, (int)(xOffset + fc.width), yOffset, 
                              (int)(yOffset + fc.height)};
-            Draw8bppPixels(screenBuffer, charDims, (byte*)fc.pixels, colour);
+            Draw8bppPixels(charDims, (byte*)fc.pixels, colour, xCutoff, yCutoff);
 		    xAdvance += fc.advance / 64;
 		}
         
     }
-
-	return {xAdvance, -yAdvance};
 }
 
 char currentChar = 0;
@@ -217,6 +218,8 @@ bool textInitialised = false;
 
 int cursorTextIndex = 0;
 int cursorLineIndex = 0;
+
+IntPair textOffset = {};
 
 void MoveCursorForward()
 {
@@ -265,7 +268,7 @@ void AddChar()
     if (line->len < INITIAL_LINE_SIZE)
     {  
         line->len += (currentChar == '\t') ? 4 : 1;
-        
+
         //Shift right
         int offset = 4 * (currentChar == '\t');
         for (int i = line->len - 1; i > cursorTextIndex + offset; --i)
@@ -345,7 +348,7 @@ TimedEvent repeatAction = {0.02f};
 bool capslockOn = false;
 bool nonCharKeyPressed = false;
 
-void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, float dt)
+void Draw(float dt)
 {
     if (!textInitialised)
     {
@@ -355,32 +358,37 @@ void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, flo
     }
 
     //Detect key input and handle char input
+    bool charKeyDown = false;
     bool charKeyPressed = false;
     bool newCharKeyPressed = false;
     for (int code = (int)KEYS_START; code < (int)NUM_INPUTS; ++code)
     {
         if (code >= (int)CHAR_KEYS_START)
         {
-            if (InputDown(input->flags[code]))
+            if (InputDown(input.flags[code]))
             {
                 char charOfKeyPressed = InputCodeToChar(
-                    (InputCode)code, 
-                    InputHeld(input->leftShift), 
-                    capslockOn);
+                (InputCode)code, 
+                InputHeld(input.leftShift), 
+                capslockOn);
                 currentChar = charOfKeyPressed;
                 AddChar();
 
+                charKeyDown = true;
                 if (charKeyPressed)
                     newCharKeyPressed = true;
                 nonCharKeyPressed = false;
             }
-            else if (InputHeld(input->flags[code]))
+            else if (InputHeld(input.flags[code]))
+            {
                 charKeyPressed = true;
+                if (charKeyDown)
+                    newCharKeyPressed = true;
+            }
         }
-        else
+        else if (InputDown(input.flags[code]))
         {
-            if (InputDown(input->flags[code]))
-                nonCharKeyPressed = true;
+            nonCharKeyPressed = true;
         }
         
     }
@@ -398,12 +406,12 @@ void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, flo
 
         byte inputFlags[] = 
         {
-            input->enter,
-            input->backspace,
-            input->right,
-            input->left,
-            input->up,
-            input->down
+            input.enter,
+            input.backspace,
+            input.right,
+            input.left,
+            input.up,
+            input.down
         };
 
         void (*inputCallbacks[])(void) = 
@@ -436,37 +444,43 @@ void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, flo
         else
             holdAction.elapsedTime = 0.0f;
 
-        if (InputDown(input->capsLock))
+        if (InputDown(input.capsLock))
             capslockOn = !capslockOn;
 
     }
 
     //Draw Background
-    Rect screenDims = {0, screenBuffer->width, 0, screenBuffer->height};
-    DrawRect(screenBuffer, screenDims, {255, 255, 255});
+    Rect screenDims = {0, screenBuffer.width, 0, screenBuffer.height};
+    DrawRect(screenDims, {255, 255, 255});
     
-    //Draw text
-    IntPair start = {52, 600}; 
-    for (int i = 0; i < numLines; ++i)
-    {
-        int y = start.y - i * CURSOR_HEIGHT;
-        DrawText(screenBuffer, fontChars, fileText[i].text, start.x, y, {0});
-
-        char lineNumText[8];
-        IntToString(i + 1, lineNumText);
-        int lineNumOffset = (fontChars[' '].advance / 64) * 4;
-        DrawText(screenBuffer, fontChars, lineNumText, start.x - lineNumOffset, y, {255, 0, 0});
-    }
-
     //Get correct position for cursor
+    const IntPair start = {52, 600}; 
     IntPair cursorPos = start;
     for (int i = 0; i < cursorTextIndex; ++i)
         cursorPos.x += fontChars[fileText[cursorLineIndex].text[i]].advance / 64;
     cursorPos.y -= cursorLineIndex * CURSOR_HEIGHT;
-    cursorPos.y -= 5; //Offset from baseline    
+    cursorPos.y -= 5; //Offset from baseline
+
+    if (cursorPos.x > screenBuffer.width)
+        textOffset.x = max(textOffset.x, cursorPos.x - screenBuffer.width);
+    else
+        textOffset.x = 0;
+
+    //Draw text
+    for (int i = 0; i < numLines; ++i)
+    {
+        int x = start.x - textOffset.x;
+        int y = start.y - i * CURSOR_HEIGHT - textOffset.y;
+        DrawText(fileText[i].text, x, y, {0}, start.x);
+
+        char lineNumText[8];
+        IntToString(i + 1, lineNumText);
+        int lineNumOffset = (fontChars[' '].advance / 64) * 4;
+        DrawText(lineNumText, start.x - lineNumOffset, y, {255, 0, 0});
+    }
 
     cursorBlink.elapsedTime += dt;
-    bool cursorMoving = charKeyPressed || InputHeld(input->backspace) || ArrowKeysHeld(input->arrowKeys);
+    bool cursorMoving = charKeyPressed || InputHeld(input.backspace) || ArrowKeysHeld(input.arrowKeys);
     if (!cursorMoving && cursorBlink.elapsedTime >= cursorBlink.interval)
     {
         holdChar.elapsedTime = 0.0f;
@@ -480,6 +494,6 @@ void Draw(ScreenBuffer* screenBuffer, FontChar fontChars[128], Input* input, flo
         const int CURSOR_WIDTH = 2;
         Rect cursorDims = {cursorPos.x, cursorPos.x + CURSOR_WIDTH, 
                            cursorPos.y, cursorPos.y + CURSOR_HEIGHT};
-        DrawRect(screenBuffer, cursorDims, {0, 255, 0});
+        DrawRect(cursorDims, {0, 255, 0});
     }
 }
