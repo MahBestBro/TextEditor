@@ -1,6 +1,6 @@
 This is in order of when to do them, so try to do whatever the first point is.
 
-FEATURES:
+FEATURES: 
     - Have lines positioned properly on screen 
     - Cursor highlighting
     - Commands (e.g., ctrl + c, ctrl + v. Some of these are reliant on cursor highlighting)
@@ -12,6 +12,5 @@ FEATURES:
     - UI?
 
 PROGRAMMING/REFACTORING:
-    - Set advances to pixels instead of 64th pixels
+    - Logging in non-debug layer
     - Refactor timed events, make them neater and more flexibe if possible?
-    
