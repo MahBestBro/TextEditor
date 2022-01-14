@@ -12,5 +12,5 @@ FEATURES:
     - UI?
 
 PROGRAMMING/REFACTORING:
-    - Logging in non-debug layer
     - Refactor timed events, make them neater and more flexibe if possible?
+    
