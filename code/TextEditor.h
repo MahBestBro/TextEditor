@@ -27,5 +27,6 @@ inline int StringLen(const char* string)
 }
 
 void Draw(float dt);
+void Print(const char* message);
 
 #endif
