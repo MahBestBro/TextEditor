@@ -131,20 +131,19 @@ void DrawRect(Rect rect, Colour colour)
     }
 }
 
-void Draw8bppPixels(Rect rect, byte* pixels, Colour colour,
-                    int xCutoff, int yCutoff)
+//TODO: Allow drawing backwards for text on left going offscreen
+void Draw8bppPixels(Rect rect, byte* pixels, int stride, Colour colour, Rect limits)
 {
-    //Assert(rect.left < screenBuffer.width && rect.right <= screenBuffer.width);
-    //Assert(rect.left >= 0 && rect.right >= 0);
-    //Assert(rect.bottom < screenBuffer.height && rect.top <= screenBuffer.height);
-    //Assert(rect.top >= 0 && rect.bottom >= 0);
     Assert(rect.left <= rect.right);
     Assert(rect.bottom <= rect.top);
 
-    rect.left   = Clamp(rect.left,   xCutoff, screenBuffer.width);
-    rect.right  = Clamp(rect.right,  xCutoff, screenBuffer.width);
-    rect.bottom = Clamp(rect.bottom, yCutoff, screenBuffer.height);
-    rect.top    = Clamp(rect.top,    yCutoff, screenBuffer.height);
+    if (!limits.right) limits.right = screenBuffer.width;
+    if (!limits.top) limits.top = screenBuffer.height;
+
+    rect.left   = Clamp(rect.left,   limits.left, limits.right);
+    rect.right  = Clamp(rect.right,  limits.left, limits.right);
+    rect.bottom = Clamp(rect.bottom, limits.bottom, limits.top);
+    rect.top    = Clamp(rect.top,    limits.bottom, limits.top);
 
     int drawWidth = rect.right - rect.left;
     int drawHeight = rect.top - rect.bottom;
@@ -156,7 +155,7 @@ void Draw8bppPixels(Rect rect, byte* pixels, Colour colour,
         byte* pixel = row;
         for (int x = 0; x < drawWidth; ++x)
         {
-            byte* drawnPixel = pixels + drawWidth * y + x;
+            byte* drawnPixel = pixels + stride * y + x;
             byte drawnR = (byte)(*drawnPixel / 255.0f * colour.r);
             byte drawnB = (byte)(*drawnPixel / 255.0f * colour.b);
             byte drawnG = (byte)(*drawnPixel / 255.0f * colour.g);
@@ -173,8 +172,7 @@ void Draw8bppPixels(Rect rect, byte* pixels, Colour colour,
     }
 }
 
-//TODO: Fix bug where w's and v's glitch at edge of screen (my guess is the width > the advance)
-void DrawText(char* text, int xCoord, int yCoord, Colour colour, int xCutoff = 0, int yCutoff = 0)
+void DrawText(char* text, int xCoord, int yCoord, Colour colour, Rect limits = {0})
 {
     char* at = text; 
 	int xAdvance = 0;
@@ -191,20 +189,24 @@ void DrawText(char* text, int xCoord, int yCoord, Colour colour, int xCutoff = 0
             //TODO: change this so that it aligns with tabs
             for (int _ = 0; _ < 4; ++_)
             {
-                Draw8bppPixels(charDims, (byte*)fc.pixels, colour, xCutoff, yCutoff);
+                Draw8bppPixels(charDims, (byte*)fc.pixels, fc.width, colour, limits);
                 xOffset += fc.left;
             }
-            xAdvance += 4 * (fc.advance / 64);
+            xAdvance += 4 * (fc.advance);
         }
 		else
 		{
+            if (at[0] == 'w' || at[0] == 'v') 
+            {
+                Assert(true);
+            }
             FontChar fc = fontChars[at[0]];
             int xOffset = fc.left + xAdvance + xCoord;
             int yOffset = yCoord - (fc.height - fc.top) - yAdvance;
             Rect charDims = {xOffset, (int)(xOffset + fc.width), yOffset, 
                              (int)(yOffset + fc.height)};
-            Draw8bppPixels(charDims, (byte*)fc.pixels, colour, xCutoff, yCutoff);
-		    xAdvance += fc.advance / 64;
+            Draw8bppPixels(charDims, (byte*)fc.pixels, fc.width, colour, limits);
+		    xAdvance += fc.advance;
 		}
         
     }
@@ -265,35 +267,34 @@ void MoveCursorDown()
 void AddChar()
 {
     Line* line = &fileText[cursorLineIndex];
-    if (line->len < INITIAL_LINE_SIZE)
-    {  
-        line->len += (currentChar == '\t') ? 4 : 1;
 
-        //Shift right
-        int offset = 4 * (currentChar == '\t');
-        for (int i = line->len - 1; i > cursorTextIndex + offset; --i)
-            line->text[i] = line->text[i-1];
-        
-        //Add character(s) and advance cursor
-        //TODO: realloc line.text if line.len >= line.size
-        line->text[cursorTextIndex] = (currentChar == '\t') ? ' ' : currentChar;
-		line->text[line->len] = 0;
-        cursorTextIndex++;
-        if (currentChar == '\t')
+    line->len += (currentChar == '\t') ? 4 : 1;
+    if (line->len >= line->size)
+    {
+        line->size *= 2;
+        line->text = (char*)realloc(line->text, line->size);
+    }
+    //Shift right
+    int offset = 4 * (currentChar == '\t');
+    for (int i = line->len - 1; i > cursorTextIndex + offset; --i)
+        line->text[i] = line->text[i-1];
+    
+    //Add character(s) and advance cursor
+    line->text[cursorTextIndex] = (currentChar == '\t') ? ' ' : currentChar;
+	line->text[line->len] = 0;
+    cursorTextIndex++;
+    if (currentChar == '\t')
+    {
+        for (int _ = 0; _ < 3; ++_)
         {
-            for (int _ = 0; _ < 3; ++_)
-            {
-                line->text[cursorTextIndex] = (currentChar == '\t') ? ' ' : currentChar;
-                cursorTextIndex++;
-            }
+            line->text[cursorTextIndex] = (currentChar == '\t') ? ' ' : currentChar;
+            cursorTextIndex++;
         }
-        
     }
 }
 
 void RemoveChar()
 {
-	//TODO: Fix bug where previous lines are deleted from existance
     Line* line = &fileText[cursorLineIndex];
     if (cursorTextIndex > 0)
     {
@@ -305,14 +306,25 @@ void RemoveChar()
         line->text[line->len] = 0;
         cursorTextIndex--;
     }
-    else
+    else if (numLines > 1)
     {
-        if (numLines > 1)
-        {
-            cursorLineIndex--;
-            numLines--;
-            cursorTextIndex = fileText[cursorLineIndex].len;
-        }
+        //Move bottom line to top
+        int prevLineIndex = cursorLineIndex;
+        cursorLineIndex--;
+        int copiedLen = fileText[prevLineIndex].len;
+        int prevLen = fileText[cursorLineIndex].len;
+        memcpy(
+            fileText[cursorLineIndex].text + fileText[cursorLineIndex].len, 
+            fileText[prevLineIndex].text, 
+            copiedLen
+        );
+        fileText[prevLineIndex].len = 0;
+        fileText[prevLineIndex].text[0] = 0;
+        fileText[cursorLineIndex].len += copiedLen;
+        fileText[cursorLineIndex].text[fileText[cursorLineIndex].len] = 0;
+
+        numLines--;
+        cursorTextIndex = prevLen;
     }
 }
 
@@ -331,7 +343,8 @@ void AddLine()
         fileText[prevLineIndex].len -= copiedLen;
         fileText[prevLineIndex].text[cursorTextIndex] = 0;
         fileText[cursorLineIndex].len = copiedLen;
-        fileText[cursorLineIndex].text[fileText[prevLineIndex].len] = 0;
+        fileText[cursorLineIndex].text[copiedLen] = 0;
+        
         cursorTextIndex = 0;
         numLines++;
     }
@@ -457,25 +470,28 @@ void Draw(float dt)
     const IntPair start = {52, 600}; 
     IntPair cursorPos = start;
     for (int i = 0; i < cursorTextIndex; ++i)
-        cursorPos.x += fontChars[fileText[cursorLineIndex].text[i]].advance / 64;
+        cursorPos.x += fontChars[fileText[cursorLineIndex].text[i]].advance;
     cursorPos.y -= cursorLineIndex * CURSOR_HEIGHT;
     cursorPos.y -= 5; //Offset from baseline
 
-    if (cursorPos.x > screenBuffer.width)
-        textOffset.x = max(textOffset.x, cursorPos.x - screenBuffer.width);
+    bool isWideChar = fontChars[currentChar].width > fontChars[currentChar].advance;
+    int xRightLimit = screenBuffer.width - 10;
+    if (cursorPos.x >= xRightLimit)
+        textOffset.x = max(textOffset.x, cursorPos.x - xRightLimit); 
     else
         textOffset.x = 0;
+	cursorPos.x -= textOffset.x;
 
     //Draw text
     for (int i = 0; i < numLines; ++i)
     {
         int x = start.x - textOffset.x;
         int y = start.y - i * CURSOR_HEIGHT - textOffset.y;
-        DrawText(fileText[i].text, x, y, {0}, start.x);
+        DrawText(fileText[i].text, x, y, {0}, {start.x, xRightLimit, 0, 0});
 
         char lineNumText[8];
         IntToString(i + 1, lineNumText);
-        int lineNumOffset = (fontChars[' '].advance / 64) * 4;
+        int lineNumOffset = (fontChars[' '].advance) * 4;
         DrawText(lineNumText, start.x - lineNumOffset, y, {255, 0, 0});
     }
 
