@@ -28,6 +28,11 @@ wchar* CStrToWStr(const char *c)
     return wc;
 }
 
+void Print(const char* message)
+{
+    OutputDebugString(CStrToWStr(message));
+}
+
 inline void win32_HandleInputDown(byte* inputFlags)
 {
     if (!InputHeld(*inputFlags)) 
@@ -195,7 +200,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         fc.height = face->glyph->bitmap.rows;
         fc.left = face->glyph->bitmap_left;
         fc.top = face->glyph->bitmap_top;
-        fc.advance = face->glyph->advance.x;
+        fc.advance = face->glyph->advance.x / 64;
         fc.pixels = malloc(fc.width * fc.height); //Each byte refers to 1 pixel (8bpp)
         memcpy(fc.pixels, face->glyph->bitmap.buffer, fc.width * fc.height);
         fontChars[c] = fc;
