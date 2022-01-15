@@ -1,8 +1,8 @@
 This is in order of when to do them, so try to do whatever the first point is.
 
 FEATURES: 
+    - Be able to delete/replace whatever text is highlighted
     - Have lines positioned properly on screen 
-    - Cursor highlighting
     - Commands (e.g., ctrl + c, ctrl + v. Some of these are reliant on cursor highlighting)
     - Smooth Offscreen text
     - Syntax highlighting
@@ -12,5 +12,7 @@ FEATURES:
     - UI?
 
 PROGRAMMING/REFACTORING:
+    - Have a function that can map a callback function to an input
+        - Pass in inputcode and function poitner, then creates a timed event mapped to input 
+          code.
     - Refactor timed events, make them neater and more flexibe if possible?
-    
