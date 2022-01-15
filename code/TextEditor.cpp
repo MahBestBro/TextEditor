@@ -20,6 +20,11 @@ struct Colour
     byte r, g, b;
 };
 
+struct ColourRGBA
+{
+    byte r, g, b, a;
+};
+
 struct Rect
 {
     int left, right, bottom, top;
@@ -98,15 +103,26 @@ void IntToString(int val, char* buffer)
     buffer[len] = 0;
 }
 
-void DrawRect(Rect rect, Colour colour)
+int TextPixelLength(char* text, int len)
+{
+    int result = 0;
+    for (int i = 0; i < len; i++)
+        result += fontChars[text[i]].advance;
+    return result;
+}
+
+void DrawRect(Rect rect, Colour colour, Rect limits = {0})
 {
     Assert(rect.left <= rect.right);
     Assert(rect.bottom <= rect.top);
 
-    rect.left   = Clamp(rect.left,   0, screenBuffer.width);
-    rect.right  = Clamp(rect.right,  0, screenBuffer.width);
-    rect.bottom = Clamp(rect.bottom, 0, screenBuffer.height);
-    rect.top    = Clamp(rect.top,    0, screenBuffer.height);
+    if (!limits.right) limits.right = screenBuffer.width;
+    if (!limits.top) limits.top = screenBuffer.height;
+
+    rect.left   = Clamp(rect.left,   limits.left, limits.right);
+    rect.right  = Clamp(rect.right,  limits.left, limits.right);
+    rect.bottom = Clamp(rect.bottom, limits.bottom, limits.top);
+    rect.top    = Clamp(rect.top,    limits.bottom, limits.top);
 
     int drawWidth = rect.right - rect.left;
     int drawHeight = rect.top - rect.bottom;
@@ -129,6 +145,54 @@ void DrawRect(Rect rect, Colour colour)
         }
 		row += screenBuffer.width * PIXEL_IN_BYTES;
     }
+}
+
+void DrawAlphaRect(Rect rect, ColourRGBA colour, Rect limits = {0})
+{
+    Assert(rect.left <= rect.right);
+    Assert(rect.bottom <= rect.top);
+
+    if (!limits.right) limits.right = screenBuffer.width;
+    if (!limits.top) limits.top = screenBuffer.height;
+
+    rect.left   = Clamp(rect.left,   limits.left, limits.right);
+    rect.right  = Clamp(rect.right,  limits.left, limits.right);
+    rect.bottom = Clamp(rect.bottom, limits.bottom, limits.top);
+    rect.top    = Clamp(rect.top,    limits.bottom, limits.top);
+
+    int drawWidth = rect.right - rect.left;
+    int drawHeight = rect.top - rect.bottom;
+
+    int start = (rect.left + rect.bottom * screenBuffer.width) * PIXEL_IN_BYTES;
+	byte* row = (byte*)screenBuffer.memory + start;
+	for (int y = 0; y < drawHeight; ++y)
+    {
+        byte* pixel = row;
+        for (int x = 0; x < drawWidth; ++x)
+        {
+            float alphaA = colour.a / 255.f;
+            float alphaB = 1.f;
+            float drawnAlpha = alphaA + alphaB * (1.f - alphaA);
+
+            byte pixelB = pixel[0];
+            byte pixelG = pixel[1];
+            byte pixelR = pixel[2];
+            byte drawnR = (byte)((colour.r*alphaA + pixelR*alphaB*(1 - alphaA)) / drawnAlpha);  
+            byte drawnG = (byte)((colour.g*alphaA + pixelG*alphaB*(1 - alphaA)) / drawnAlpha);  
+            byte drawnB = (byte)((colour.b*alphaA + pixelB*alphaB*(1 - alphaA)) / drawnAlpha);  
+            
+            *pixel = drawnB;
+            pixel++;
+            *pixel = drawnG;
+            pixel++;
+            *pixel = drawnR;
+            pixel++;
+            *pixel = 0;
+            pixel++;
+        }
+		row += screenBuffer.width * PIXEL_IN_BYTES;
+    }
+
 }
 
 //TODO: Allow drawing backwards for text on left going offscreen
@@ -196,10 +260,6 @@ void DrawText(char* text, int xCoord, int yCoord, Colour colour, Rect limits = {
         }
 		else
 		{
-            if (at[0] == 'w' || at[0] == 'v') 
-            {
-                Assert(true);
-            }
             FontChar fc = fontChars[at[0]];
             int xOffset = fc.left + xAdvance + xCoord;
             int yOffset = yCoord - (fc.height - fc.top) - yAdvance;
@@ -221,19 +281,47 @@ bool textInitialised = false;
 int cursorTextIndex = 0;
 int cursorLineIndex = 0;
 
+int highlightFrontIndex = -1;
+int highlightBackIndex = -1;
+
 IntPair textOffset = {};
 
 void MoveCursorForward()
 {
     if (cursorTextIndex < fileText[cursorLineIndex].len)
-    {
+    {  
         cursorTextIndex++;
+        if (InputHeld(input.leftShift))
+        {
+            Assert(!Xor(highlightFrontIndex == -1, highlightBackIndex == -1));
+            if (highlightFrontIndex == highlightBackIndex) 
+            {
+                highlightFrontIndex = cursorTextIndex - 1;
+                highlightBackIndex  = cursorTextIndex;
+            }
+            else
+            { 
+                int frontIndexDistFromCursor = abs(cursorTextIndex - highlightFrontIndex);
+                int backIndexDistFromCursor =  abs(cursorTextIndex - highlightBackIndex);
+                if (frontIndexDistFromCursor <= backIndexDistFromCursor ||
+                    backIndexDistFromCursor == 0)
+					highlightFrontIndex++;
+				else
+					highlightBackIndex++;
+            }
+        }
+        else
+        {
+            highlightFrontIndex = -1;
+            highlightBackIndex  = -1;
+        }
     }
     else if (cursorLineIndex < numLines - 1)
     {
         //Go down a line
         cursorLineIndex++;
         cursorTextIndex = 0;
+        //TODO: Handle highlighting
     }
 }
 
@@ -242,12 +330,37 @@ void MoveCursorBackward()
     if (cursorTextIndex > 0)
     {
         cursorTextIndex--;
+        if (InputHeld(input.leftShift))
+        {
+            Assert(!Xor(highlightFrontIndex == -1, highlightBackIndex == -1));
+            if (highlightFrontIndex == highlightBackIndex) 
+            {
+                highlightBackIndex  = cursorTextIndex + 1;
+                highlightFrontIndex = cursorTextIndex;
+            }
+            else
+            { 
+                int frontIndexDistFromCursor = abs(cursorTextIndex - highlightFrontIndex);
+                int backIndexDistFromCursor =  abs(cursorTextIndex - highlightBackIndex);
+				if (backIndexDistFromCursor <= frontIndexDistFromCursor ||
+                    frontIndexDistFromCursor == 0)
+					highlightBackIndex--;
+				else
+					highlightFrontIndex--;
+            } 
+        }
+        else
+        {
+            highlightFrontIndex = -1;
+            highlightBackIndex  = -1;
+        }
     }
     else if (cursorLineIndex > 0)
     {
         //Go up a line
         cursorLineIndex--;
         cursorTextIndex = fileText[cursorLineIndex].len;
+        //TODO: Handle highlighting
     }
 }
 
@@ -482,18 +595,31 @@ void Draw(float dt)
         textOffset.x = 0;
 	cursorPos.x -= textOffset.x;
 
-    //Draw text
     for (int i = 0; i < numLines; ++i)
     {
+        //Draw text
         int x = start.x - textOffset.x;
         int y = start.y - i * CURSOR_HEIGHT - textOffset.y;
         DrawText(fileText[i].text, x, y, {0}, {start.x, xRightLimit, 0, 0});
 
+        //Draw Line num
         char lineNumText[8];
         IntToString(i + 1, lineNumText);
         int lineNumOffset = (fontChars[' '].advance) * 4;
         DrawText(lineNumText, start.x - lineNumOffset, y, {255, 0, 0});
     }
+
+    //Draw highlighted text
+    if (highlightFrontIndex != -1 && highlightBackIndex != -1)
+    {
+        const int highlightedTextSize = highlightBackIndex - highlightFrontIndex;
+        char* lineText = fileText[cursorLineIndex].text;
+        int x = start.x + TextPixelLength(lineText, highlightFrontIndex) - textOffset.x;
+        int y = cursorPos.y - cursorLineIndex * CURSOR_HEIGHT - textOffset.y;
+        int xOffset = TextPixelLength(lineText + highlightFrontIndex, highlightedTextSize);
+        DrawAlphaRect({x, x + xOffset, y, y + CURSOR_HEIGHT}, {0, 255, 0, 255 / 3});
+    }
+    
 
     cursorBlink.elapsedTime += dt;
     bool cursorMoving = charKeyPressed || InputHeld(input.backspace) || ArrowKeysHeld(input.arrowKeys);
