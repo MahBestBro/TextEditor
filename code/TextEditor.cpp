@@ -376,7 +376,6 @@ void MoveCursorDown()
     cursorTextIndex = min(cursorTextIndex, fileText[cursorLineIndex].len);
 }
 
-
 void AddChar()
 {
     Line* line = &fileText[cursorLineIndex];
@@ -406,6 +405,24 @@ void AddChar()
     }
 }
 
+void ReplaceHighlightedText()
+{
+    bool moveCursor = highlightFrontIndex != cursorTextIndex;
+    int removedLen = highlightBackIndex - highlightFrontIndex - 1;
+    highlightFrontIndex = -1;
+    highlightBackIndex  = -1;
+
+    Line* line = &fileText[cursorLineIndex];   
+	line->len -= removedLen;
+    line->text[cursorTextIndex] = currentChar;
+	for (int i = cursorTextIndex + 1 - removedLen * (moveCursor); i < line->len; ++i)
+	{
+		line->text[i] = line->text[i + removedLen];
+	}
+    line->text[line->len] = 0;
+    cursorTextIndex -= (moveCursor) ? removedLen : -1; 
+}
+
 void RemoveChar()
 {
     Line* line = &fileText[cursorLineIndex];
@@ -417,7 +434,7 @@ void RemoveChar()
 			line->text[i] = line->text[i+1];
 		}
         line->text[line->len] = 0;
-        cursorTextIndex--;
+        cursorTextIndex--; 
     }
     else if (numLines > 1)
     {
@@ -439,6 +456,33 @@ void RemoveChar()
         numLines--;
         cursorTextIndex = prevLen;
     }
+}
+
+//TODO: Handle multiline deleting
+void RemoveHighlightedText()
+{   
+    bool moveCursor = highlightFrontIndex != cursorTextIndex;
+    int removedLen = highlightBackIndex - highlightFrontIndex;
+    highlightFrontIndex = -1;
+    highlightBackIndex  = -1;
+
+    Line* line = &fileText[cursorLineIndex];   
+	line->len -= removedLen;
+	for (int i = cursorTextIndex - removedLen * (moveCursor); i < line->len; ++i)
+	{
+		line->text[i] = line->text[i + removedLen];
+	}
+    line->text[line->len] = 0;
+    if (moveCursor) cursorTextIndex -= removedLen; 
+
+}
+
+void Backspace()
+{
+    if (highlightFrontIndex != -1 && highlightBackIndex != -1)
+        RemoveHighlightedText();
+    else
+        RemoveChar();
 }
 
 void AddLine()
@@ -498,7 +542,10 @@ void Draw(float dt)
                 InputHeld(input.leftShift), 
                 capslockOn);
                 currentChar = charOfKeyPressed;
-                AddChar();
+                if (highlightFrontIndex != -1 && highlightBackIndex != -1)
+                    ReplaceHighlightedText();
+                else
+                    AddChar();
 
                 charKeyDown = true;
                 if (charKeyPressed)
@@ -543,7 +590,7 @@ void Draw(float dt)
         void (*inputCallbacks[])(void) = 
         {
             AddLine, 
-            RemoveChar, 
+            Backspace, 
             MoveCursorForward, 
             MoveCursorBackward, 
             MoveCursorUp, 
@@ -615,7 +662,7 @@ void Draw(float dt)
         const int highlightedTextSize = highlightBackIndex - highlightFrontIndex;
         char* lineText = fileText[cursorLineIndex].text;
         int x = start.x + TextPixelLength(lineText, highlightFrontIndex) - textOffset.x;
-        int y = cursorPos.y - cursorLineIndex * CURSOR_HEIGHT - textOffset.y;
+        int y = cursorPos.y - textOffset.y;
         int xOffset = TextPixelLength(lineText + highlightFrontIndex, highlightedTextSize);
         DrawAlphaRect({x, x + xOffset, y, y + CURSOR_HEIGHT}, {0, 255, 0, 255 / 3});
     }
