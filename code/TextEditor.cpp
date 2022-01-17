@@ -5,6 +5,7 @@
 
 #define INITIAL_LINE_SIZE 256
 #define CURSOR_HEIGHT 18
+#define PIXELS_UNDER_BASELINE 5
 
 extern Input input;
 extern FontChar fontChars[128];
@@ -13,6 +14,11 @@ extern ScreenBuffer screenBuffer;
 struct IntPair
 {
     int x, y;
+};
+
+struct IntRange
+{
+    int low, high;
 };
 
 struct Colour
@@ -281,8 +287,9 @@ bool textInitialised = false;
 int cursorTextIndex = 0;
 int cursorLineIndex = 0;
 
-int highlightFrontIndex = -1;
-int highlightBackIndex = -1;
+IntRange highlightRanges[MAX_LINES];
+int highlightedLineIndicies[MAX_LINES];
+int numHighlightedLines = 0;
 
 IntPair textOffset = {};
 
@@ -291,29 +298,32 @@ void MoveCursorForward()
     if (cursorTextIndex < fileText[cursorLineIndex].len)
     {  
         cursorTextIndex++;
+        IntRange* highlightRange = &highlightRanges[cursorLineIndex];
         if (InputHeld(input.leftShift))
         {
-            Assert(!Xor(highlightFrontIndex == -1, highlightBackIndex == -1));
-            if (highlightFrontIndex == highlightBackIndex) 
+            if (highlightRange->low == highlightRange->high) 
             {
-                highlightFrontIndex = cursorTextIndex - 1;
-                highlightBackIndex  = cursorTextIndex;
+                if (highlightRange->low == -1)
+                    highlightedLineIndicies[numHighlightedLines++] = cursorLineIndex;
+                highlightRange->low  = cursorTextIndex - 1;
+                highlightRange->high = cursorTextIndex;
             }
             else
             { 
-                int frontIndexDistFromCursor = abs(cursorTextIndex - highlightFrontIndex);
-                int backIndexDistFromCursor =  abs(cursorTextIndex - highlightBackIndex);
+                int frontIndexDistFromCursor = abs(cursorTextIndex - highlightRange->low);
+                int backIndexDistFromCursor =  abs(cursorTextIndex - highlightRange->high);
                 if (frontIndexDistFromCursor <= backIndexDistFromCursor ||
                     backIndexDistFromCursor == 0)
-					highlightFrontIndex++;
+					highlightRange->low++;
 				else
-					highlightBackIndex++;
+					highlightRange->high++;
             }
         }
         else
         {
-            highlightFrontIndex = -1;
-            highlightBackIndex  = -1;
+            for (int i = 0; i < numHighlightedLines; ++i)
+                highlightRanges[highlightedLineIndicies[i]] = {-1, -1};
+            numHighlightedLines = 0;
         }
     }
     else if (cursorLineIndex < numLines - 1)
@@ -321,7 +331,28 @@ void MoveCursorForward()
         //Go down a line
         cursorLineIndex++;
         cursorTextIndex = 0;
-        //TODO: Handle highlighting
+        //Handle highlighting
+        IntRange* highlightRange = &highlightRanges[cursorLineIndex];
+        if (InputHeld(input.leftShift))
+        {
+            if (highlightRange->low == -1)
+            {
+                highlightedLineIndicies[numHighlightedLines++] = cursorLineIndex;
+                highlightRange->low  = fileText[cursorLineIndex].len;
+                highlightRange->high = fileText[cursorLineIndex].len;
+            }
+            else
+            {
+                numHighlightedLines--;
+                highlightRanges[cursorLineIndex - 1] = {-1, -1};
+            }
+        }
+        else
+        {
+            for (int i = 0; i < numHighlightedLines; ++i)
+                highlightRanges[highlightedLineIndicies[i]] = {-1, -1};
+            numHighlightedLines = 0;
+        }
     }
 }
 
@@ -330,29 +361,33 @@ void MoveCursorBackward()
     if (cursorTextIndex > 0)
     {
         cursorTextIndex--;
+        //Handle Highlighting
+        IntRange* highlightRange = &highlightRanges[cursorLineIndex];
         if (InputHeld(input.leftShift))
         {
-            Assert(!Xor(highlightFrontIndex == -1, highlightBackIndex == -1));
-            if (highlightFrontIndex == highlightBackIndex) 
+            if (highlightRange->low == highlightRange->high) 
             {
-                highlightBackIndex  = cursorTextIndex + 1;
-                highlightFrontIndex = cursorTextIndex;
+                if (highlightRange->low == -1)
+                    highlightedLineIndicies[numHighlightedLines++] = cursorLineIndex;
+                highlightRange->high = cursorTextIndex + 1;
+                highlightRange->low  = cursorTextIndex;
             }
             else
             { 
-                int frontIndexDistFromCursor = abs(cursorTextIndex - highlightFrontIndex);
-                int backIndexDistFromCursor =  abs(cursorTextIndex - highlightBackIndex);
+                int frontIndexDistFromCursor = abs(cursorTextIndex - highlightRange->low);
+                int backIndexDistFromCursor =  abs(cursorTextIndex - highlightRange->high);
 				if (backIndexDistFromCursor <= frontIndexDistFromCursor ||
                     frontIndexDistFromCursor == 0)
-					highlightBackIndex--;
+					highlightRange->high--;
 				else
-					highlightFrontIndex--;
+					highlightRange->low--;
             } 
         }
         else
         {
-            highlightFrontIndex = -1;
-            highlightBackIndex  = -1;
+            for (int i = 0; i < numHighlightedLines; ++i)
+                highlightRanges[highlightedLineIndicies[i]] = {-1, -1};
+            numHighlightedLines = 0;
         }
     }
     else if (cursorLineIndex > 0)
@@ -360,7 +395,28 @@ void MoveCursorBackward()
         //Go up a line
         cursorLineIndex--;
         cursorTextIndex = fileText[cursorLineIndex].len;
-        //TODO: Handle highlighting
+        //Handle highlighting
+        IntRange* highlightRange = &highlightRanges[cursorLineIndex];
+        if (InputHeld(input.leftShift))
+        {
+            if (highlightRange->low == -1)
+            {
+                highlightedLineIndicies[numHighlightedLines++] = cursorLineIndex;
+                highlightRange->low  = fileText[cursorLineIndex].len;
+                highlightRange->high = fileText[cursorLineIndex].len;
+            }
+            else
+            {
+                numHighlightedLines--;
+                highlightRanges[cursorLineIndex + 1] = {-1, -1};
+            }
+        }
+        else
+        {
+            for (int i = 0; i < numHighlightedLines; ++i)
+                highlightRanges[highlightedLineIndicies[i]] = {-1, -1};
+            numHighlightedLines = 0;
+        }
     }
 }
 
@@ -372,7 +428,7 @@ void MoveCursorUp()
 
 void MoveCursorDown()
 {
-    cursorLineIndex += (cursorLineIndex < numLines);
+    cursorLineIndex += (cursorLineIndex < numLines - 1);
     cursorTextIndex = min(cursorTextIndex, fileText[cursorLineIndex].len);
 }
 
@@ -407,20 +463,22 @@ void AddChar()
 
 void ReplaceHighlightedText()
 {
-    bool moveCursor = highlightFrontIndex != cursorTextIndex;
-    int removedLen = highlightBackIndex - highlightFrontIndex - 1;
-    highlightFrontIndex = -1;
-    highlightBackIndex  = -1;
+    UNIMPLEMENTED("Make this replace all highlighted text with currentChar");
 
-    Line* line = &fileText[cursorLineIndex];   
-	line->len -= removedLen;
-    line->text[cursorTextIndex] = currentChar;
-	for (int i = cursorTextIndex + 1 - removedLen * (moveCursor); i < line->len; ++i)
-	{
-		line->text[i] = line->text[i + removedLen];
-	}
-    line->text[line->len] = 0;
-    cursorTextIndex -= (moveCursor) ? removedLen : -1; 
+    //bool moveCursor = highlightFrontIndex != cursorTextIndex;
+    //int removedLen = highlightBackIndex - highlightFrontIndex - 1;
+    //highlightFrontIndex = -1;
+    //highlightBackIndex  = -1;
+//
+    //Line* line = &fileText[cursorLineIndex];   
+	//line->len -= removedLen;
+    //line->text[cursorTextIndex] = currentChar;
+	//for (int i = cursorTextIndex + 1 - removedLen * (moveCursor); i < line->len; ++i)
+	//{
+	//	line->text[i] = line->text[i + removedLen];
+	//}
+    //line->text[line->len] = 0;
+    //cursorTextIndex -= (moveCursor) ? removedLen : -1; 
 }
 
 void RemoveChar()
@@ -461,25 +519,27 @@ void RemoveChar()
 //TODO: Handle multiline deleting
 void RemoveHighlightedText()
 {   
-    bool moveCursor = highlightFrontIndex != cursorTextIndex;
-    int removedLen = highlightBackIndex - highlightFrontIndex;
-    highlightFrontIndex = -1;
-    highlightBackIndex  = -1;
-
-    Line* line = &fileText[cursorLineIndex];   
-	line->len -= removedLen;
-	for (int i = cursorTextIndex - removedLen * (moveCursor); i < line->len; ++i)
-	{
-		line->text[i] = line->text[i + removedLen];
-	}
-    line->text[line->len] = 0;
-    if (moveCursor) cursorTextIndex -= removedLen; 
+    UNIMPLEMENTED("Make this delete all highlighted text");
+    
+    //bool moveCursor = highlightFrontIndex != cursorTextIndex;
+    //int removedLen = highlightBackIndex - highlightFrontIndex;
+    //highlightFrontIndex = -1;
+    //highlightBackIndex  = -1;
+//
+    //Line* line = &fileText[cursorLineIndex];   
+	//line->len -= removedLen;
+	//for (int i = cursorTextIndex - removedLen * (moveCursor); i < line->len; ++i)
+	//{
+	//	line->text[i] = line->text[i + removedLen];
+	//}
+    //line->text[line->len] = 0;
+    //if (moveCursor) cursorTextIndex -= removedLen; 
 
 }
 
 void Backspace()
 {
-    if (highlightFrontIndex != -1 && highlightBackIndex != -1)
+    if (numHighlightedLines)
         RemoveHighlightedText();
     else
         RemoveChar();
@@ -523,7 +583,10 @@ void Draw(float dt)
     if (!textInitialised)
     {
         for (int i = 0; i < MAX_LINES; ++i)
+        {
             fileText[i] = InitLine();
+            highlightRanges[i] = {-1, -1};
+        }
 		textInitialised = true;
     }
 
@@ -542,7 +605,7 @@ void Draw(float dt)
                 InputHeld(input.leftShift), 
                 capslockOn);
                 currentChar = charOfKeyPressed;
-                if (highlightFrontIndex != -1 && highlightBackIndex != -1)
+                if (numHighlightedLines)
                     ReplaceHighlightedText();
                 else
                     AddChar();
@@ -632,7 +695,7 @@ void Draw(float dt)
     for (int i = 0; i < cursorTextIndex; ++i)
         cursorPos.x += fontChars[fileText[cursorLineIndex].text[i]].advance;
     cursorPos.y -= cursorLineIndex * CURSOR_HEIGHT;
-    cursorPos.y -= 5; //Offset from baseline
+    cursorPos.y -= PIXELS_UNDER_BASELINE; 
 
     bool isWideChar = fontChars[currentChar].width > fontChars[currentChar].advance;
     int xRightLimit = screenBuffer.width - 10;
@@ -657,13 +720,14 @@ void Draw(float dt)
     }
 
     //Draw highlighted text
-    if (highlightFrontIndex != -1 && highlightBackIndex != -1)
+    for (int i = 0; i < numHighlightedLines; ++i)
     {
-        const int highlightedTextSize = highlightBackIndex - highlightFrontIndex;
-        char* lineText = fileText[cursorLineIndex].text;
-        int x = start.x + TextPixelLength(lineText, highlightFrontIndex) - textOffset.x;
-        int y = cursorPos.y - textOffset.y;
-        int xOffset = TextPixelLength(lineText + highlightFrontIndex, highlightedTextSize);
+        int l = highlightedLineIndicies[i];
+        const int highlightedTextSize = highlightRanges[l].high - highlightRanges[l].low;
+        char* lineText = fileText[l].text;
+        int x = start.x + TextPixelLength(lineText, highlightRanges[l].low) - textOffset.x;
+        int y = start.y - l * CURSOR_HEIGHT - PIXELS_UNDER_BASELINE - textOffset.y;
+        int xOffset = TextPixelLength(lineText + highlightRanges[l].low, highlightedTextSize);
         DrawAlphaRect({x, x + xOffset, y, y + CURSOR_HEIGHT}, {0, 255, 0, 255 / 3});
     }
     
