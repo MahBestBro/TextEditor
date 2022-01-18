@@ -1,17 +1,18 @@
-This is in order of when to do them, so try to do whatever the first point is.
+There's no strict order but generally speaking the closer to the top the more important
 
 FEATURES: 
-    - Be able to delete/replace whatever text is highlighted
     - Have lines positioned properly on screen 
     - Commands (e.g., ctrl + c, ctrl + v. Some of these are reliant on cursor highlighting)
     - Smooth Offscreen text
     - Syntax highlighting
     - Load and save file
     - Have brackets and quotes come in pairs
+    - Multiline cursor
     - User settings/customisation for text colour and maybe inputs if not too tedious
     - UI?
 
 PROGRAMMING/REFACTORING:
+    - Refactor all the highlighting stuff - clean repetition where possible
     - Have a function that can map a callback function to an input
         - Pass in inputcode and function poitner, then creates a timed event mapped to input 
           code.
