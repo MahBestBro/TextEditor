@@ -337,6 +337,7 @@ void MoveCursorForward()
         {
             if (highlightRange->low == -1)
             {
+                Assert(highlightRange->high == -1);
                 highlightedLineIndicies[numHighlightedLines++] = cursorLineIndex;
                 highlightRange->low  = fileText[cursorLineIndex].len;
                 highlightRange->high = fileText[cursorLineIndex].len;
@@ -396,11 +397,12 @@ void MoveCursorBackward()
         cursorLineIndex--;
         cursorTextIndex = fileText[cursorLineIndex].len;
         //Handle highlighting
-        IntRange* highlightRange = &highlightRanges[cursorLineIndex];
         if (InputHeld(input.leftShift))
         {
+            IntRange* highlightRange = &highlightRanges[cursorLineIndex];
             if (highlightRange->low == -1)
             {
+                Assert(highlightRange->high == -1);
                 highlightedLineIndicies[numHighlightedLines++] = cursorLineIndex;
                 highlightRange->low  = fileText[cursorLineIndex].len;
                 highlightRange->high = fileText[cursorLineIndex].len;
@@ -422,15 +424,77 @@ void MoveCursorBackward()
 
 void MoveCursorUp()
 {
-    cursorLineIndex -= (cursorLineIndex > 0);
-    cursorTextIndex = min(cursorTextIndex, fileText[cursorLineIndex].len);
+    if (cursorLineIndex > 0)
+    {
+        cursorLineIndex--; 
+        cursorTextIndex = min(cursorTextIndex, fileText[cursorLineIndex].len);
+        if (InputHeld(input.leftShift))
+        {
+            IntRange* upperHighlightRange = &highlightRanges[cursorLineIndex];
+            IntRange* lowerHighlightRange = &highlightRanges[cursorLineIndex + 1];
+            if (upperHighlightRange->low == -1)
+            {
+                Assert(upperHighlightRange->high == -1);
+	    		if (lowerHighlightRange->low == -1)
+	    			highlightedLineIndicies[numHighlightedLines++] = cursorLineIndex + 1;
+                highlightedLineIndicies[numHighlightedLines++] = cursorLineIndex;
+                upperHighlightRange->low  = cursorTextIndex;
+                upperHighlightRange->high = fileText[cursorLineIndex].len;
+                lowerHighlightRange->low  = 0;
+                lowerHighlightRange->high = max(cursorTextIndex, lowerHighlightRange->high);
+            }
+            else
+            {
+                numHighlightedLines--;
+                *lowerHighlightRange = {-1, -1};
+                upperHighlightRange->high = cursorTextIndex;
+            }
+        }
+        else
+        {
+            for (int i = 0; i < numHighlightedLines; ++i)
+                highlightRanges[highlightedLineIndicies[i]] = {-1, -1};
+            numHighlightedLines = 0;
+        }
+    }
 }
 
 void MoveCursorDown()
 {
-    cursorLineIndex += (cursorLineIndex < numLines - 1);
-    cursorTextIndex = min(cursorTextIndex, fileText[cursorLineIndex].len);
-}
+    if (cursorLineIndex < numLines - 1)
+    {
+        cursorLineIndex++;
+        cursorTextIndex = min(cursorTextIndex, fileText[cursorLineIndex].len);
+        if (InputHeld(input.leftShift))
+        {
+            IntRange* upperHighlightRange = &highlightRanges[cursorLineIndex - 1];
+            IntRange* lowerHighlightRange = &highlightRanges[cursorLineIndex];
+            if (lowerHighlightRange->low == -1)
+            {
+                Assert(lowerHighlightRange->high == -1);
+	    		if (upperHighlightRange->low == -1)
+	    			highlightedLineIndicies[numHighlightedLines++] = cursorLineIndex - 1;
+                highlightedLineIndicies[numHighlightedLines++] = cursorLineIndex;
+                lowerHighlightRange->low  = 0;
+                lowerHighlightRange->high = cursorTextIndex;
+                if (upperHighlightRange->low == -1) upperHighlightRange->low = cursorTextIndex;
+                upperHighlightRange->high = fileText[cursorLineIndex - 1].len;
+            }
+            else
+            {
+                numHighlightedLines--;
+                *upperHighlightRange = {-1, -1};
+                lowerHighlightRange->low = cursorTextIndex;
+            }
+        }
+        else
+        {
+            for (int i = 0; i < numHighlightedLines; ++i)
+                highlightRanges[highlightedLineIndicies[i]] = {-1, -1};
+            numHighlightedLines = 0;
+        }
+    }
+}   
 
 void AddChar()
 {
@@ -463,22 +527,61 @@ void AddChar()
 
 void ReplaceHighlightedText()
 {
-    UNIMPLEMENTED("Make this replace all highlighted text with currentChar");
+    //Move cursor and find top and bottom lines
+    int lastLineIndex = 0, secondLastLineIndex = 0; 
+    int bottomLineIndex = cursorLineIndex;
+    int topLineIndex = cursorLineIndex; 
+    if (numHighlightedLines > 1)
+    {
+        lastLineIndex = highlightedLineIndicies[numHighlightedLines-1];
+        secondLastLineIndex = highlightedLineIndicies[numHighlightedLines-2];
 
-    //bool moveCursor = highlightFrontIndex != cursorTextIndex;
-    //int removedLen = highlightBackIndex - highlightFrontIndex - 1;
-    //highlightFrontIndex = -1;
-    //highlightBackIndex  = -1;
-//
-    //Line* line = &fileText[cursorLineIndex];   
-	//line->len -= removedLen;
-    //line->text[cursorTextIndex] = currentChar;
-	//for (int i = cursorTextIndex + 1 - removedLen * (moveCursor); i < line->len; ++i)
-	//{
-	//	line->text[i] = line->text[i + removedLen];
-	//}
-    //line->text[line->len] = 0;
-    //cursorTextIndex -= (moveCursor) ? removedLen : -1; 
+        if (lastLineIndex > secondLastLineIndex || highlightRanges[0].low != cursorTextIndex)
+        {
+            bottomLineIndex = lastLineIndex;
+            topLineIndex = highlightedLineIndicies[0];
+            cursorTextIndex = highlightRanges[0].low;
+            cursorLineIndex = topLineIndex;
+        }
+        else
+        {
+            bottomLineIndex = highlightedLineIndicies[0];
+            topLineIndex = lastLineIndex;
+        }
+    }
+    cursorTextIndex++;
+
+    //Get highlighted text on bottom line
+    IntRange bottomHighlight = highlightRanges[bottomLineIndex];
+    const int remainingBottomLen = fileText[bottomLineIndex].len - bottomHighlight.high;
+    char* remainingBottomText = (char*)malloc(remainingBottomLen + 1);
+    memcpy(remainingBottomText, fileText[bottomLineIndex].text + bottomHighlight.high, 
+           remainingBottomLen);
+    remainingBottomText[remainingBottomLen] = 0;
+
+    //Shift lines below highlited section up
+	numLines -= numHighlightedLines - 1;
+    for (int i = topLineIndex + 1; i < numLines; ++i)
+    {
+        fileText[i] = fileText[i + numHighlightedLines - 1];
+    }
+
+    //Remove Text from top line and connect bottom line text
+    //TODO: realloc if not bottom line length > topLine.size
+    IntRange topHighlight = highlightRanges[topLineIndex];
+    const int topRemovedLen = topHighlight.high - topHighlight.low;
+    fileText[topLineIndex].len += remainingBottomLen * (numHighlightedLines > 1) - topRemovedLen+1;
+    fileText[topLineIndex].text[topHighlight.low] = currentChar;
+    for (int i = 0; i < remainingBottomLen; ++i)
+    {
+        fileText[topLineIndex].text[i + topHighlight.low + 1] = remainingBottomText[i];
+    }
+    fileText[topLineIndex].text[fileText[topLineIndex].len] = 0;
+
+    //Clear highlight ranges
+    for (int i = 0; i < numHighlightedLines; ++i)
+        highlightRanges[highlightedLineIndicies[i]] = {-1, -1};
+    numHighlightedLines = 0; 
 }
 
 void RemoveChar()
@@ -516,24 +619,63 @@ void RemoveChar()
     }
 }
 
-//TODO: Handle multiline deleting
 void RemoveHighlightedText()
 {   
-    UNIMPLEMENTED("Make this delete all highlighted text");
+    //Move cursor and find top and bottom lines
+    int lastLineIndex = 0, secondLastLineIndex = 0; 
+    int bottomLineIndex = cursorLineIndex;
+    int topLineIndex = cursorLineIndex; 
+    if (numHighlightedLines > 1)
+    {
+        lastLineIndex = highlightedLineIndicies[numHighlightedLines-1];
+        secondLastLineIndex = highlightedLineIndicies[numHighlightedLines-2];
+
+        if (lastLineIndex > secondLastLineIndex || highlightRanges[0].low != cursorTextIndex)
+        {
+            bottomLineIndex = lastLineIndex;
+            topLineIndex = highlightedLineIndicies[0];
+            cursorTextIndex = highlightRanges[0].low;
+            cursorLineIndex = topLineIndex;
+        }
+        else
+        {
+            bottomLineIndex = highlightedLineIndicies[0];
+            topLineIndex = lastLineIndex;
+        }
+    }
     
-    //bool moveCursor = highlightFrontIndex != cursorTextIndex;
-    //int removedLen = highlightBackIndex - highlightFrontIndex;
-    //highlightFrontIndex = -1;
-    //highlightBackIndex  = -1;
-//
-    //Line* line = &fileText[cursorLineIndex];   
-	//line->len -= removedLen;
-	//for (int i = cursorTextIndex - removedLen * (moveCursor); i < line->len; ++i)
-	//{
-	//	line->text[i] = line->text[i + removedLen];
-	//}
-    //line->text[line->len] = 0;
-    //if (moveCursor) cursorTextIndex -= removedLen; 
+
+    //Get highlighted text on bottom line
+    IntRange bottomHighlight = highlightRanges[bottomLineIndex];
+    const int remainingBottomLen = fileText[bottomLineIndex].len - bottomHighlight.high;
+    char* remainingBottomText = (char*)malloc(remainingBottomLen + 1);
+    memcpy(remainingBottomText, fileText[bottomLineIndex].text + bottomHighlight.high, 
+           remainingBottomLen);
+    remainingBottomText[remainingBottomLen] = 0;
+
+    //Shift lines below highlited section up
+	numLines -= numHighlightedLines - 1;
+    for (int i = topLineIndex + 1; i < numLines; ++i)
+    {
+        fileText[i] = fileText[i + numHighlightedLines - 1];
+    }
+
+    //Remove Text from top line and connect bottom line text
+    //TODO: realloc if not bottom line length > topLine.size
+    IntRange topHighlight = highlightRanges[topLineIndex];
+    const int topRemovedLen = topHighlight.high - topHighlight.low;
+    fileText[topLineIndex].len += remainingBottomLen * (numHighlightedLines > 1) - topRemovedLen;
+    for (int i = 0; i < remainingBottomLen; ++i)
+    {
+        fileText[topLineIndex].text[i + topHighlight.low] = remainingBottomText[i];
+    }
+    fileText[topLineIndex].text[fileText[topLineIndex].len] = 0;
+    free(remainingBottomText);
+
+    //Clear highlight ranges
+    for (int i = 0; i < numHighlightedLines; ++i)
+        highlightRanges[highlightedLineIndicies[i]] = {-1, -1};
+    numHighlightedLines = 0;
 
 }
 
@@ -547,6 +689,11 @@ void Backspace()
 
 void AddLine()
 {
+    if (numHighlightedLines)
+    {
+        UNIMPLEMENTED("TODO: Handle highlighted text");
+    }
+
     if (numLines < MAX_LINES)
     {
         int prevLineIndex = cursorLineIndex;
