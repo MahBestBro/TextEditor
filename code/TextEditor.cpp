@@ -422,10 +422,12 @@ void MoveCursorBackward()
     }
 }
 
+//TODO: When moving back to single line, move back to previous cursorTextIndex
 void MoveCursorUp()
 {
     if (cursorLineIndex > 0)
     {
+        int prevTextIndex = cursorTextIndex; 
         cursorLineIndex--; 
         cursorTextIndex = min(cursorTextIndex, fileText[cursorLineIndex].len);
         if (InputHeld(input.leftShift))
@@ -441,7 +443,7 @@ void MoveCursorUp()
                 upperHighlightRange->low  = cursorTextIndex;
                 upperHighlightRange->high = fileText[cursorLineIndex].len;
                 lowerHighlightRange->low  = 0;
-                lowerHighlightRange->high = max(cursorTextIndex, lowerHighlightRange->high);
+                lowerHighlightRange->high = max(prevTextIndex, lowerHighlightRange->high);
             }
             else
             {
@@ -459,6 +461,7 @@ void MoveCursorUp()
     }
 }
 
+//TODO: When moving back to single line, move back to previous cursorTextIndex
 void MoveCursorDown()
 {
     if (cursorLineIndex < numLines - 1)
@@ -535,12 +538,14 @@ void ReplaceHighlightedText()
     {
         lastLineIndex = highlightedLineIndicies[numHighlightedLines-1];
         secondLastLineIndex = highlightedLineIndicies[numHighlightedLines-2];
+        const int topHighlightIndex = highlightedLineIndicies[0];
 
-        if (lastLineIndex > secondLastLineIndex || highlightRanges[0].low != cursorTextIndex)
-        {
+        if (lastLineIndex > secondLastLineIndex || 
+            highlightRanges[topHighlightIndex].low != cursorTextIndex)
+        {   
             bottomLineIndex = lastLineIndex;
-            topLineIndex = highlightedLineIndicies[0];
-            cursorTextIndex = highlightRanges[0].low;
+            topLineIndex = topHighlightIndex;
+            cursorTextIndex = highlightRanges[topLineIndex].low;
             cursorLineIndex = topLineIndex;
         }
         else
@@ -597,25 +602,27 @@ void RemoveChar()
         line->text[line->len] = 0;
         cursorTextIndex--; 
     }
-    else if (numLines > 1)
+    else if (numLines > 1 && cursorLineIndex > 0)
     {
-        //Move bottom line to top
-        int prevLineIndex = cursorLineIndex;
-        cursorLineIndex--;
-        int copiedLen = fileText[prevLineIndex].len;
-        int prevLen = fileText[cursorLineIndex].len;
+        //TODO: Prevent Overflow
+        int copiedLen = fileText[cursorLineIndex].len;
+		cursorTextIndex = fileText[cursorLineIndex - 1].len;
         memcpy(
-            fileText[cursorLineIndex].text + fileText[cursorLineIndex].len, 
-            fileText[prevLineIndex].text, 
+            fileText[cursorLineIndex - 1].text + fileText[cursorLineIndex - 1].len, 
+            fileText[cursorLineIndex].text, 
             copiedLen
         );
-        fileText[prevLineIndex].len = 0;
-        fileText[prevLineIndex].text[0] = 0;
-        fileText[cursorLineIndex].len += copiedLen;
-        fileText[cursorLineIndex].text[fileText[cursorLineIndex].len] = 0;
+        fileText[cursorLineIndex - 1].len += copiedLen;
+        fileText[cursorLineIndex - 1].text[fileText[cursorLineIndex - 1].len] = 0;
 
-        numLines--;
-        cursorTextIndex = prevLen;
+		//Shift lines up
+		for (int i = cursorLineIndex; i < numLines; ++i)
+		{
+			fileText[i] = fileText[i + 1];
+		}
+		numLines--;
+
+        cursorLineIndex--;
     }
 }
 
@@ -629,12 +636,14 @@ void RemoveHighlightedText()
     {
         lastLineIndex = highlightedLineIndicies[numHighlightedLines-1];
         secondLastLineIndex = highlightedLineIndicies[numHighlightedLines-2];
+        const int topHighlightIndex = highlightedLineIndicies[0];
 
-        if (lastLineIndex > secondLastLineIndex || highlightRanges[0].low != cursorTextIndex)
+        if (lastLineIndex > secondLastLineIndex || 
+            highlightRanges[topHighlightIndex].low != cursorTextIndex)
         {
             bottomLineIndex = lastLineIndex;
-            topLineIndex = highlightedLineIndicies[0];
-            cursorTextIndex = highlightRanges[0].low;
+            topLineIndex = topHighlightIndex;
+            cursorTextIndex = highlightRanges[topLineIndex].low;
             cursorLineIndex = topLineIndex;
         }
         else
@@ -643,6 +652,8 @@ void RemoveHighlightedText()
             topLineIndex = lastLineIndex;
         }
     }
+
+    Assert(cursorTextIndex >= 0);
     
 
     //Get highlighted text on bottom line
@@ -655,6 +666,7 @@ void RemoveHighlightedText()
 
     //Shift lines below highlited section up
 	numLines -= numHighlightedLines - 1;
+    Assert(cursorLineIndex < numLines);
     for (int i = topLineIndex + 1; i < numLines; ++i)
     {
         fileText[i] = fileText[i + numHighlightedLines - 1];
@@ -676,7 +688,6 @@ void RemoveHighlightedText()
     for (int i = 0; i < numHighlightedLines; ++i)
         highlightRanges[highlightedLineIndicies[i]] = {-1, -1};
     numHighlightedLines = 0;
-
 }
 
 void Backspace()
@@ -691,13 +702,22 @@ void AddLine()
 {
     if (numHighlightedLines)
     {
-        UNIMPLEMENTED("TODO: Handle highlighted text");
+        RemoveHighlightedText();
     }
 
     if (numLines < MAX_LINES)
     {
         int prevLineIndex = cursorLineIndex;
         cursorLineIndex++;
+
+        //Shift lines down
+        for (int i = numLines; i > cursorLineIndex; --i)
+        {
+            fileText[i] = fileText[i-1];
+        }
+		fileText[cursorLineIndex] = InitLine();
+        numLines++;
+        
         int copiedLen = fileText[prevLineIndex].len - cursorTextIndex;
         memcpy(
             fileText[cursorLineIndex].text, 
@@ -710,7 +730,6 @@ void AddLine()
         fileText[cursorLineIndex].text[copiedLen] = 0;
         
         cursorTextIndex = 0;
-        numLines++;
     }
 }
 
