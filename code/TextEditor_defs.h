@@ -21,6 +21,8 @@
 #define PIXEL_IN_BYTES 4
 #define FONT_SIZE 13
 
+#define MAX_LINES 256
+
 typedef uint8_t byte;
 typedef uint8_t uchar;
 typedef uint8_t uint8;
