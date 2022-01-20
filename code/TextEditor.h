@@ -18,6 +18,41 @@ struct FontChar
     void* pixels;
 };
 
+
+struct IntPair
+{
+    int x, y;
+};
+
+struct IntRange
+{
+    int low, high;
+};
+
+struct Line
+{
+    char* text;
+    int size;
+    int len;
+    bool changed;
+};
+
+struct Editor
+{
+    char currentChar = 0;
+    Line lines[MAX_LINES];
+    int numLines = 1;
+
+    int cursorTextIndex = 0;
+    int cursorLineIndex = 0;
+
+    IntRange highlightRanges[MAX_LINES];
+    int highlightedLineIndicies[MAX_LINES];
+    int numHighlightedLines = 0;
+
+    IntPair textOffset = {};
+};
+
 inline int StringLen(const char* string)
 {
     int result = 0;
@@ -26,6 +61,7 @@ inline int StringLen(const char* string)
     return result;
 }
 
+void Init();
 void Draw(float dt);
 void Print(const char* message);
 
