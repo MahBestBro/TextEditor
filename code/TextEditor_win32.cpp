@@ -210,6 +210,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     running = true;
     int64 prevCount = 0;
+
+    Init();
+
     while (running)
     { 
         LARGE_INTEGER currentCountResult;
