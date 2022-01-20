@@ -1,11 +1,11 @@
 There's no strict order but generally speaking the closer to the top the more important
 
 FEATURES: 
-    - Have lines positioned properly on screen 
+    - Smooth transitioning offcreen text
     - Commands (e.g., ctrl + c, ctrl + v. Some of these are reliant on cursor highlighting)
-    - Smooth Offscreen text
-    - Syntax highlighting
     - Load and save file
+    - Syntax highlighting
+    - Mutiple tabs
     - Have brackets and quotes come in pairs
     - Multiline cursor
     - User settings/customisation for text colour and maybe inputs if not too tedious
