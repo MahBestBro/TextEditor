@@ -306,6 +306,7 @@ void ExtendHighlightTransitioningLine(bool forward)
     }
 }
 
+//TODO: Fix bug where going up and down repeatedly triggers assert at line 319
 void ExtendHighlightVertically(bool up, int prevTextIndex = 0)
 {
     IntRange* upperHighlightRange = &editor.highlightRanges[editor.cursorLineIndex - !up];
@@ -629,6 +630,7 @@ void Draw(float dt)
                 if (editor.numHighlightedLines)
                     RemoveHighlightedText();
                 AddChar();
+                holdAction.elapsedTime = 0.0f;
 
                 charKeyDown = true;
                 if (charKeyPressed)
@@ -641,16 +643,24 @@ void Draw(float dt)
                 if (charKeyDown)
                     newCharKeyPressed = true;
             }
+            else if (InputUp(input.flags[code]))
+            {
+                newCharKeyPressed = true;
+            }
         }
         else if (InputDown(input.flags[code]))
         {
             nonCharKeyPressed = true;
         }
+        else if (InputHeld(input.leftCtrl))
+        {
+            break;
+        }
         
     }
     
-    //Handle non char input and trigger timed events
-    if (charKeyPressed && !nonCharKeyPressed)
+    if (charKeyPressed && !nonCharKeyPressed && !InputHeld(input.leftCtrl) && 
+        InputHeld(input.flags[CharToInputCode(editor.currentChar)]))
     {
         if (newCharKeyPressed)
             holdChar.elapsedTime = 0.0f;
@@ -703,7 +713,18 @@ void Draw(float dt)
         if (InputDown(input.capsLock))
             capslockOn = !capslockOn;
 
+        if (InputHeld(input.leftCtrl) && InputHeld(input.flags[INPUTCODE_A]))
+        {
+            editor.numHighlightedLines = 0;
+            for (int i = 0; i < editor.numLines; ++i)
+            {
+                editor.highlightRanges[i] = {0, editor.lines[i].len};
+                editor.highlightedLineIndicies[editor.numHighlightedLines++] = i;
+            }
+        }
+
     }
+
 
     //Draw Background
     Rect screenDims = {0, screenBuffer.width, 0, screenBuffer.height};
@@ -732,12 +753,14 @@ void Draw(float dt)
         editor.textOffset.y = 0;
     cursorPos.y += editor.textOffset.y;
 
+    Rect textBounds = {start.x, xRightLimit, yBottomLimit, 0};
+
     for (int i = 0; i < editor.numLines; ++i)
     {
         //Draw text
         int x = start.x - editor.textOffset.x;
         int y = start.y - i * CURSOR_HEIGHT + editor.textOffset.y;
-        DrawText(editor.lines[i].text, x, y, {0}, {start.x, xRightLimit, yBottomLimit, 0});
+        DrawText(editor.lines[i].text, x, y, {0}, textBounds);
 
         //Draw Line num
         char lineNumText[8];
@@ -754,12 +777,12 @@ void Draw(float dt)
         char* lineText = editor.lines[l].text;
         int highlightedPixelLength = TextPixelLength(lineText, editor.highlightRanges[l].low); 
         int x = start.x + highlightedPixelLength - editor.textOffset.x;
-        int y = start.y - l * CURSOR_HEIGHT - PIXELS_UNDER_BASELINE - editor.textOffset.y;
+        int y = start.y - l * CURSOR_HEIGHT - PIXELS_UNDER_BASELINE + editor.textOffset.y;
         int xOffset = TextPixelLength(lineText + editor.highlightRanges[l].low, textSize);
         if (editor.lines[l].len == 0) xOffset = fontChars[' '].advance;
-        DrawAlphaRect({x, x + xOffset, y, y + CURSOR_HEIGHT}, {0, 255, 0, 255 / 3});
+        DrawAlphaRect({x, x + xOffset, y, y + CURSOR_HEIGHT}, {0, 255, 0, 255 / 3}, textBounds);
     }
-    
+
 
     cursorBlink.elapsedTime += dt;
     bool cursorMoving = charKeyPressed || InputHeld(input.backspace) || ArrowKeysHeld(input.arrowKeys);
