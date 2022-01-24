@@ -33,6 +33,63 @@ void Print(const char* message)
     OutputDebugString(CStrToWStr(message));
 }
 
+void CopyToClipboard(const char* text, size_t len)
+{
+    LPTSTR lptstrCopy; 
+    HGLOBAL hglbCopy; 
+
+    //Should this maybe return error??? When would not opening the clipboard happen???
+    if (!OpenClipboard(NULL)) 
+        return; 
+
+    EmptyClipboard();
+
+    hglbCopy = GlobalAlloc(GMEM_MOVEABLE, (len + 1) * sizeof(wchar)); 
+    if (hglbCopy == NULL) 
+    { 
+        //Should this maybe return error??? 
+        CloseClipboard(); 
+        return; 
+    }
+
+    lptstrCopy = (LPTSTR)GlobalLock(hglbCopy); 
+    memcpy(lptstrCopy, CStrToWStr(text), len * sizeof(wchar)); 
+    lptstrCopy[len] = (wchar)0;    // null character 
+    GlobalUnlock(hglbCopy); 
+
+    SetClipboardData(CF_UNICODETEXT, hglbCopy); 
+
+    CloseClipboard(); 
+}
+
+//TODO: If we decide to fully support unicode, have this return wchar*
+char* GetClipboardText()
+{
+    HGLOBAL hglb; 
+    LPTSTR lptstr; 
+
+    if (!OpenClipboard(NULL)) 
+        return nullptr;
+
+    char* result = nullptr;
+    hglb = GetClipboardData(CF_UNICODETEXT);
+    if (hglb != NULL) 
+    {   
+        lptstr = (wchar*)GlobalLock(hglb); 
+        if (lptstr != NULL) 
+        { 
+            size_t len = wcslen(lptstr);
+            result = (char*)malloc(len + 1);
+            wcstombs_s(0, result, len + 1, lptstr, len);
+            result[len] = 0;
+            GlobalUnlock(hglb); 
+        }
+    }
+
+    CloseClipboard();
+    return result;
+}
+
 inline void win32_HandleInputDown(byte* inputFlags)
 {
     if (!InputHeld(*inputFlags)) 
