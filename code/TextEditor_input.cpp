@@ -84,7 +84,7 @@ char InputCodeToChar(InputCode code, bool shift, bool caps)
     if (code == INPUTCODE_SPACE)
         return ' ';
     else if (code == INPUTCODE_ENTER)
-        return '\n';
+        return '\n'; //This might be redundant?
     else if (code == INPUTCODE_TAB)
         return (shift) ? 0 : '\t';
     else if (code >= INPUTCODE_A && code <= INPUTCODE_Z)
@@ -118,4 +118,48 @@ char InputCodeToChar(InputCode code, bool shift, bool caps)
     }
 
     return 0;
+}
+
+InputCode CharToInputCode(char c)
+{
+    if (c >= 'A' && c <= 'Z')
+        return (InputCode)(c - 'A' + LETTER_START);
+    else if (c >= 'a' && c <= 'z')
+        return (InputCode)(c - 'a' + LETTER_START);
+    else if (c >= '0' && c <= '9')
+        return (InputCode)(c + NUMBER_START);
+
+    switch(c)
+    {
+        case '!': return INPUTCODE_1;
+        case '@': return INPUTCODE_2;
+        case '#': return INPUTCODE_3;
+        case '$': return INPUTCODE_4;
+        case '%': return INPUTCODE_5;
+        case '^': return INPUTCODE_6;
+        case '&': return INPUTCODE_7;
+        case '*': return INPUTCODE_8;
+        case '(': return INPUTCODE_9;
+        case ')': return INPUTCODE_0;
+
+        case '{': case '[' : return INPUTCODE_OPEN_SQ_BRACKET;
+        case '}': case ']' : return INPUTCODE_CLOSED_SQ_BRACKET;
+        case ':': case ';' : return INPUTCODE_SEMICOLON;
+        case '"': case '\'': return INPUTCODE_QUOTE;
+        case '<': case ',' : return INPUTCODE_COMMA;
+        case '>': case '.' : return INPUTCODE_PERIOD;
+        case '?': case '/' : return INPUTCODE_FORWARD_SLASH;
+        
+        case '|': case '\\': return INPUTCODE_BACK_SLASH;
+        case '_': case '-' : return INPUTCODE_MINUS;
+        case '+': case '=' : return INPUTCODE_EQUALS;
+        case '~': case '`' : return INPUTCODE_GRAVE;
+
+        case ' ' : return INPUTCODE_SPACE;
+        case '\t': return INPUTCODE_TAB;
+        case '\n': return INPUTCODE_ENTER; //This might be redundant?
+    }
+
+    Assert(false) //YOU SHOULDN'T HAVE REACHED HERE
+    return (InputCode)0;
 }
