@@ -306,7 +306,6 @@ void ExtendHighlightTransitioningLine(bool forward)
     }
 }
 
-//TODO: Fix bug where going up and down repeatedly triggers assert at line 319
 void ExtendHighlightVertically(bool up, int prevTextIndex = 0)
 {
     IntRange* upperHighlightRange = &editor.highlightRanges[editor.cursorLineIndex - !up];
@@ -336,8 +335,8 @@ void ExtendHighlightVertically(bool up, int prevTextIndex = 0)
     else
     {
         editor.numHighlightedLines--;
-        *lowerHighlightRange = {-1, -1};
-        upperHighlightRange->high = editor.cursorTextIndex;
+        *nonPrioritisedRange = {-1, -1};
+        prioritisedRange->high = editor.cursorTextIndex;
     }
 }
 
