@@ -65,4 +65,7 @@ void Init();
 void Draw(float dt);
 void Print(const char* message);
 
+void CopyToClipboard(const char* text, size_t len);
+char* GetClipboardText();
+
 #endif
