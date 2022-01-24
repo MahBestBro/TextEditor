@@ -91,6 +91,13 @@ void IntToString(int val, char* buffer)
     buffer[len] = 0;
 }
 
+#define QuickSort(arr, len, elSize) qsort(arr, len, elSize, _qsortCompare)
+
+int _qsortCompare(const void* a, const void* b)
+{
+    return (*(int*)a - *(int*)b);
+}
+
 int TextPixelLength(char* text, int len)
 {
     int result = 0;
@@ -541,8 +548,9 @@ void RemoveHighlightedText()
         editor.lines[topLineIndex].text[i + topHighlight.low] = remainingBottomText[i];
     }
     editor.lines[topLineIndex].text[editor.lines[topLineIndex].len] = 0;
-    free(remainingBottomText);
 
+	editor.cursorTextIndex = topHighlight.low;
+	free(remainingBottomText);
     ClearHighlights();
 }
 
@@ -712,13 +720,72 @@ void Draw(float dt)
         if (InputDown(input.capsLock))
             capslockOn = !capslockOn;
 
-        if (InputHeld(input.leftCtrl) && InputHeld(input.flags[INPUTCODE_A]))
+        //Highlight everything
+        if (InputHeld(input.leftCtrl) && InputDown(input.flags[INPUTCODE_A]))
         {
             editor.numHighlightedLines = 0;
             for (int i = 0; i < editor.numLines; ++i)
             {
                 editor.highlightRanges[i] = {0, editor.lines[i].len};
                 editor.highlightedLineIndicies[editor.numHighlightedLines++] = i;
+            }
+        }
+
+        //Copy highlighted Text
+        //TODO: Double check if this is susceptable to overflow attacks
+        if (InputHeld(input.leftCtrl) && InputDown(input.flags[INPUTCODE_C]))
+        {
+            int* highlightIndicies = (int*)malloc(editor.numHighlightedLines * sizeof(int));
+            memcpy(highlightIndicies, editor.highlightedLineIndicies, editor.numHighlightedLines * sizeof(int));
+            QuickSort(highlightIndicies, editor.numHighlightedLines, sizeof(int));
+
+            size_t copySize = 0;
+            for (int i = 0; i < editor.numHighlightedLines; ++i)
+            {
+                int l = highlightIndicies[i];
+                copySize += editor.highlightRanges[l].high - editor.highlightRanges[l].low;
+                if (i != editor.numHighlightedLines - 1) copySize += 2;
+            }
+
+            char* copiedText = (char*)malloc(copySize + 1);
+            int at = 0;
+            for (int i = 0; i < editor.numHighlightedLines; ++i)
+            {
+                int l = highlightIndicies[i];
+                char* highlightedText = editor.lines[l].text + editor.highlightRanges[l].low;
+                size_t size = editor.highlightRanges[l].high - editor.highlightRanges[l].low; 
+                memcpy(copiedText + at, highlightedText, size);
+                if (i != editor.numHighlightedLines - 1)
+                {
+                    copiedText[at + size] = '\r'; 
+                    copiedText[at + size + 1] = '\n'; 
+                    at += 2;
+                }
+                at += (int)size;
+            }
+            copiedText[copySize] = 0;
+
+            CopyToClipboard(copiedText, copySize);
+        }
+
+        //Paste text
+        //TODO: handle replacing highlight, multiline pasting and string overflow
+        if (InputHeld(input.leftCtrl) && InputDown(input.flags[INPUTCODE_V]))
+        {
+            char* textToPaste = GetClipboardText();
+            if (textToPaste != nullptr)
+            {
+                Line* currentLine = &editor.lines[editor.cursorLineIndex];
+                size_t pasteLen = strlen(textToPaste);
+                for (int i = 0; i < pasteLen; ++i)
+                {
+                    int lineAt = editor.cursorTextIndex + i;
+                    currentLine->text[lineAt + pasteLen] = currentLine->text[lineAt];
+                    currentLine->text[lineAt] = textToPaste[i];
+                }
+				currentLine->len += (int)pasteLen;
+				currentLine->text[currentLine->len] = 0;
+                editor.cursorTextIndex += (int)pasteLen;
             }
         }
 
