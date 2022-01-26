@@ -69,6 +69,36 @@ void HandleTimedEvent(TimedEvent* timedEvent, float dt, TimedEvent* nestedEvent)
     }
 }
 
+//Can only think that these are the only 3 needed. Chnge this in the future?
+enum InitialHeldKeys
+{
+    CTRL  = 0b001,
+    ALT   = 0b010,
+    SHIFT = 0b100
+};
+
+struct KeyCommand
+{
+    //initialHeldKeys: Bit flags that correspond to the initial keys to be held
+    byte initialHeldKeys;  
+    InputCode commandKey;
+};
+
+bool KeyCommandDown(KeyCommand keyCommand)
+{
+    Assert(keyCommand.initialHeldKeys);
+
+    bool result = InputDown(input.flags[keyCommand.commandKey]);
+    if ((keyCommand.initialHeldKeys & CTRL) == CTRL)
+        result = result && InputHeld(input.leftCtrl);
+    if ((keyCommand.initialHeldKeys & ALT) == ALT)
+        result = result && InputHeld(input.leftAlt);
+    if ((keyCommand.initialHeldKeys & SHIFT) == SHIFT)
+        result = result && InputHeld(input.leftShift);
+    
+    return result;
+}
+
 void IntToString(int val, char* buffer)
 {
 	char* at = buffer;
@@ -261,16 +291,17 @@ void ClearHighlights()
     editor.numHighlightedLines = 0;
 }
 
-void ExtendHighlightHorizontally(bool forward)
+void ExtendHighlightHorizontally(bool forward, int prevTextIndex)
 {
+    int highlightLen = abs(editor.cursorTextIndex - prevTextIndex);
     IntRange* highlightRange = &editor.highlightRanges[editor.cursorLineIndex];
     if (highlightRange->low == highlightRange->high) 
     {
         if (highlightRange->low == -1)
             editor.highlightedLineIndicies[editor.numHighlightedLines++] = 
                 editor.cursorLineIndex;
-        highlightRange->low  = editor.cursorTextIndex - (forward);
-        highlightRange->high = editor.cursorTextIndex + (!forward);
+        highlightRange->low  = editor.cursorTextIndex - (forward) * highlightLen;
+        highlightRange->high = editor.cursorTextIndex + (!forward) * highlightLen;
     }
     else
     { 
@@ -281,13 +312,13 @@ void ExtendHighlightHorizontally(bool forward)
 
         if (prioritisedDist <= nonPrioritisedDist || nonPrioritisedDist == 0)
         {
-            highlightRange->low  +=  forward;
-            highlightRange->high -= !forward;
+            highlightRange->low  +=  forward * highlightLen;
+            highlightRange->high -= !forward * highlightLen;
         }
         else
         {
-            highlightRange->low  -= !forward;
-            highlightRange->high +=  forward;
+            highlightRange->low  -= !forward * highlightLen;
+            highlightRange->high +=  forward * highlightLen;
         }
     }
 }
@@ -347,16 +378,33 @@ void ExtendHighlightVertically(bool up, int prevTextIndex = 0)
     }
 }
 
+//TODO: Have cursor 
+void AdvanceCursorToEndOfWord(bool forward)
+{
+    Line line = editor.lines[editor.cursorLineIndex];
+    bool skipNonAlphaNumericChars = true;
+    do 
+    {
+        editor.cursorTextIndex += (forward) ? 1 : -1;
+        skipNonAlphaNumericChars = IsAlphaNumeric(line.text[editor.cursorTextIndex - !forward]);
+    }
+    while (InRange(editor.cursorTextIndex, 1, line.len - 1) && 
+           IsAlphaNumeric(line.text[editor.cursorTextIndex - !forward]) && 
+           skipNonAlphaNumericChars);
+}
+
 void MoveCursorForward()
 {
     if (editor.cursorTextIndex < editor.lines[editor.cursorLineIndex].len)
-    {  
-        editor.cursorTextIndex++;
+    {
+        int prevTextIndex = editor.cursorTextIndex;  
+        if (InputHeld(input.leftCtrl))
+            AdvanceCursorToEndOfWord(true);
+        else
+            editor.cursorTextIndex++;
 
         if (InputHeld(input.leftShift))
-            ExtendHighlightHorizontally(true);
-        else
-            ClearHighlights();
+            ExtendHighlightHorizontally(true, prevTextIndex);
     }
     else if (editor.cursorLineIndex < editor.numLines - 1)
     {
@@ -366,8 +414,6 @@ void MoveCursorForward()
 
         if (InputHeld(input.leftShift))
             ExtendHighlightTransitioningLine(true);
-        else
-            ClearHighlights();
     }
 }
 
@@ -375,11 +421,14 @@ void MoveCursorBackward()
 {
     if (editor.cursorTextIndex > 0)
     {
-        editor.cursorTextIndex--;
-        if (InputHeld(input.leftShift))
-            ExtendHighlightHorizontally(false);
+        int prevTextIndex = editor.cursorTextIndex;  
+        if (InputHeld(input.leftCtrl))
+            AdvanceCursorToEndOfWord(false);
         else
-            ClearHighlights();
+            editor.cursorTextIndex--;
+
+        if (InputHeld(input.leftShift))
+            ExtendHighlightHorizontally(false, prevTextIndex);
     }
     else if (editor.cursorLineIndex > 0)
     {
@@ -389,8 +438,6 @@ void MoveCursorBackward()
 
         if (InputHeld(input.leftShift))
             ExtendHighlightTransitioningLine(false);
-        else
-            ClearHighlights();
     }
 }
 
@@ -404,8 +451,6 @@ void MoveCursorUp()
         editor.cursorTextIndex = min(editor.cursorTextIndex, editor.lines[editor.cursorLineIndex].len);
         if (InputHeld(input.leftShift))
             ExtendHighlightVertically(true, prevTextIndex);
-        else
-            ClearHighlights();
     }
 }
 
@@ -418,8 +463,6 @@ void MoveCursorDown()
         editor.cursorTextIndex = min(editor.cursorTextIndex, editor.lines[editor.cursorLineIndex].len);
         if (InputHeld(input.leftShift))
             ExtendHighlightVertically(false);
-        else
-            ClearHighlights();
     }
 }   
 
@@ -551,7 +594,6 @@ void RemoveHighlightedText()
 
 	editor.cursorTextIndex = topHighlight.low;
 	free(remainingBottomText);
-    ClearHighlights();
 }
 
 void Backspace()
@@ -597,6 +639,73 @@ void AddLine()
     }
 }
 
+void HighlightEntireFile()
+{
+    editor.numHighlightedLines = 0;
+    for (int i = 0; i < editor.numLines; ++i)
+    {
+        editor.highlightRanges[i] = {0, editor.lines[i].len};
+        editor.highlightedLineIndicies[editor.numHighlightedLines++] = i;
+    }
+}
+
+//TODO: Double check if this is susceptable to overflow attacks
+void CopyHighlightedText()
+{
+    int* highlightIndicies = (int*)malloc(editor.numHighlightedLines * sizeof(int));
+    memcpy(highlightIndicies, editor.highlightedLineIndicies, editor.numHighlightedLines * sizeof(int));
+    QuickSort(highlightIndicies, editor.numHighlightedLines, sizeof(int));
+
+    size_t copySize = 0;
+    for (int i = 0; i < editor.numHighlightedLines; ++i)
+    {
+        int l = highlightIndicies[i];
+        copySize += editor.highlightRanges[l].high - editor.highlightRanges[l].low;
+        if (i != editor.numHighlightedLines - 1) copySize += 2;
+    }
+
+    if (copySize <= 0) return;
+
+    char* copiedText = (char*)malloc(copySize + 1);
+    int at = 0;
+    for (int i = 0; i < editor.numHighlightedLines; ++i)
+    {
+        int l = highlightIndicies[i];
+        char* highlightedText = editor.lines[l].text + editor.highlightRanges[l].low;
+        size_t size = editor.highlightRanges[l].high - editor.highlightRanges[l].low; 
+        memcpy(copiedText + at, highlightedText, size);
+        if (i != editor.numHighlightedLines - 1)
+        {
+            copiedText[at + size] = '\r'; 
+            copiedText[at + size + 1] = '\n'; 
+            at += 2;
+        }
+        at += (int)size;
+    }
+    copiedText[copySize] = 0;
+
+    CopyToClipboard(copiedText, copySize);
+}
+
+//TODO: handle replacing highlight, multiline pasting and string overflow
+void Paste()
+{
+    char* textToPaste = GetClipboardText();
+    if (textToPaste != nullptr)
+    {
+        Line* currentLine = &editor.lines[editor.cursorLineIndex];
+        size_t pasteLen = strlen(textToPaste);
+        for (int i = 0; i < pasteLen; ++i)
+        {
+            int lineAt = editor.cursorTextIndex + i;
+            currentLine->text[lineAt + pasteLen] = currentLine->text[lineAt];
+            currentLine->text[lineAt] = textToPaste[i];
+        }
+        currentLine->len += (int)pasteLen;
+        currentLine->text[currentLine->len] = 0;
+        editor.cursorTextIndex += (int)pasteLen;
+    }
+}
 
 TimedEvent cursorBlink = {0.5f};
 TimedEvent holdChar = {0.5f};
@@ -672,11 +781,15 @@ void Draw(float dt)
         if (newCharKeyPressed)
             holdChar.elapsedTime = 0.0f;
         HandleTimedEvent(&holdChar, dt, &repeatChar);
+
+        if (!InputHeld(input.leftShift))
+            ClearHighlights();
     }
     else
     {
         holdChar.elapsedTime = 0.0f;
 
+        //TODO: Move these arrays out of loop at some point
         byte inputFlags[] = 
         {
             input.enter,
@@ -705,6 +818,10 @@ void Draw(float dt)
                 repeatAction.OnTrigger = inputCallbacks[i];
                 inputCallbacks[i]();
                 holdAction.elapsedTime = 0.0f;
+
+                //NOTE: This i < 2 check may get bad in the future
+                if (i < 2 || !InputHeld(input.leftShift))
+                    ClearHighlights();
             }
             else if (InputHeld(inputFlags[i]))
             {
@@ -720,74 +837,30 @@ void Draw(float dt)
         if (InputDown(input.capsLock))
             capslockOn = !capslockOn;
 
-        //Highlight everything
-        if (InputHeld(input.leftCtrl) && InputDown(input.flags[INPUTCODE_A]))
+        if (!inputHeld)
         {
-            editor.numHighlightedLines = 0;
-            for (int i = 0; i < editor.numLines; ++i)
+            //TODO: Move these arrays out of loop at some point
+            KeyCommand keyCommands[] =
             {
-                editor.highlightRanges[i] = {0, editor.lines[i].len};
-                editor.highlightedLineIndicies[editor.numHighlightedLines++] = i;
+                {CTRL, INPUTCODE_A},
+                {CTRL, INPUTCODE_C},
+                {CTRL, INPUTCODE_V}
+            };
+
+            void (*keyCommandCallbacks[])(void) = 
+            {
+                HighlightEntireFile,
+                CopyHighlightedText,
+                Paste
+            };
+
+            for (int i = 0; i < ArrayLen(keyCommands); ++i)
+            {
+                if (KeyCommandDown(keyCommands[i]))
+                    keyCommandCallbacks[i]();
             }
         }
-
-        //Copy highlighted Text
-        //TODO: Double check if this is susceptable to overflow attacks
-        if (InputHeld(input.leftCtrl) && InputDown(input.flags[INPUTCODE_C]))
-        {
-            int* highlightIndicies = (int*)malloc(editor.numHighlightedLines * sizeof(int));
-            memcpy(highlightIndicies, editor.highlightedLineIndicies, editor.numHighlightedLines * sizeof(int));
-            QuickSort(highlightIndicies, editor.numHighlightedLines, sizeof(int));
-
-            size_t copySize = 0;
-            for (int i = 0; i < editor.numHighlightedLines; ++i)
-            {
-                int l = highlightIndicies[i];
-                copySize += editor.highlightRanges[l].high - editor.highlightRanges[l].low;
-                if (i != editor.numHighlightedLines - 1) copySize += 2;
-            }
-
-            char* copiedText = (char*)malloc(copySize + 1);
-            int at = 0;
-            for (int i = 0; i < editor.numHighlightedLines; ++i)
-            {
-                int l = highlightIndicies[i];
-                char* highlightedText = editor.lines[l].text + editor.highlightRanges[l].low;
-                size_t size = editor.highlightRanges[l].high - editor.highlightRanges[l].low; 
-                memcpy(copiedText + at, highlightedText, size);
-                if (i != editor.numHighlightedLines - 1)
-                {
-                    copiedText[at + size] = '\r'; 
-                    copiedText[at + size + 1] = '\n'; 
-                    at += 2;
-                }
-                at += (int)size;
-            }
-            copiedText[copySize] = 0;
-
-            CopyToClipboard(copiedText, copySize);
-        }
-
-        //Paste text
-        //TODO: handle replacing highlight, multiline pasting and string overflow
-        if (InputHeld(input.leftCtrl) && InputDown(input.flags[INPUTCODE_V]))
-        {
-            char* textToPaste = GetClipboardText();
-            if (textToPaste != nullptr)
-            {
-                Line* currentLine = &editor.lines[editor.cursorLineIndex];
-                size_t pasteLen = strlen(textToPaste);
-                for (int i = 0; i < pasteLen; ++i)
-                {
-                    int lineAt = editor.cursorTextIndex + i;
-                    currentLine->text[lineAt + pasteLen] = currentLine->text[lineAt];
-                    currentLine->text[lineAt] = textToPaste[i];
-                }
-				currentLine->len += (int)pasteLen;
-				currentLine->text[currentLine->len] = 0;
-                editor.cursorTextIndex += (int)pasteLen;
-            }
-        }
+        
 
     }
 
