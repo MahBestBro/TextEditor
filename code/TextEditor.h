@@ -61,6 +61,21 @@ inline int StringLen(const char* string)
     return result;
 }
 
+inline bool IsAlphabetical(char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
+
+inline bool IsNumeric(char c)
+{
+    return c >= '0' && c <= '9';
+}
+
+inline bool IsAlphaNumeric(char c)
+{
+    return IsAlphabetical(c) || IsNumeric(c);
+}
+
 void Init();
 void Draw(float dt);
 void Print(const char* message);
