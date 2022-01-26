@@ -1,10 +1,11 @@
 There's no strict order but generally speaking the closer to the top the more important
 
 FEATURES: 
+    - Undo stack
     - Smooth transitioning offcreen text
-    - Commands (e.g., ctrl + c, ctrl + v. Some of these are reliant on cursor highlighting)
     - Load and save file
     - Syntax highlighting
+    - The rest of the default commands (do some research)
     - Mutiple tabs
     - Have brackets and quotes come in pairs
     - Multiline cursor
@@ -12,7 +13,6 @@ FEATURES:
     - UI?
 
 PROGRAMMING/REFACTORING:
-    - Refactor all the highlighting stuff - clean repetition where possible
     - Have a function that can map a callback function to an input
         - Pass in inputcode and function poitner, then creates a timed event mapped to input 
           code.
