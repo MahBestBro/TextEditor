@@ -707,6 +707,14 @@ void Paste()
     }
 }
 
+//TODO: Investigate Performance of this
+void CutHighlightedText()
+{
+    CopyHighlightedText();
+    RemoveHighlightedText();
+    ClearHighlights();
+}
+
 TimedEvent cursorBlink = {0.5f};
 TimedEvent holdChar = {0.5f};
 TimedEvent repeatChar = {0.02f, &AddChar};
@@ -844,14 +852,16 @@ void Draw(float dt)
             {
                 {CTRL, INPUTCODE_A},
                 {CTRL, INPUTCODE_C},
-                {CTRL, INPUTCODE_V}
+                {CTRL, INPUTCODE_V},
+                {CTRL, INPUTCODE_X}
             };
 
             void (*keyCommandCallbacks[])(void) = 
             {
                 HighlightEntireFile,
                 CopyHighlightedText,
-                Paste
+                Paste,
+                CutHighlightedText
             };
 
             for (int i = 0; i < ArrayLen(keyCommands); ++i)
