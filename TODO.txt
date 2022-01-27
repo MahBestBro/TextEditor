@@ -1,16 +1,39 @@
 There's no strict order but generally speaking the closer to the top the more important
 
 FEATURES: 
-    - Undo stack
-    - Smooth transitioning offcreen text
+    - Undo and Redo stack
+        - Actions are separated by invis characters, brackets and other non character input 
+          actions (e.g. moving and backspace)
     - Load and save file
     - Syntax highlighting
+    - Wrap Text
+    - Find and Replace
     - The rest of the default commands (do some research)
+    - Smooth transitioning offcreen text
     - Mutiple tabs
     - Have brackets and quotes come in pairs
     - Multiline cursor
     - User settings/customisation for text colour and maybe inputs if not too tedious
     - UI?
+    - Terminal?
+
+LIST OF COMMANDS TO IMPLEMENT:
+    - Ctrl+F: Find
+    - Ctrl+L: Highlights Line
+    - Ctrl+N: Creates new text file
+    - Ctrl+O: Open File
+    - Ctrl+Q: Close tab
+    - Ctrl+S: Save
+    - Ctrl+T: Opens terminal (unlikely but would be cool)
+    - Ctrl+Y: Redo
+    - Ctrl+Z: Undo
+    -
+    - Ctrl+Shift+C: Opens command prompt
+    - Ctrl+Shift+S: Save As
+    - Ctrl+Shift+F: Highlights all instances of word in file
+    - Ctrl+Shift+L: Delete Line
+    - Ctrl+Shift+N: Opens New Window (do we want this?)
+    - Ctrl+Shift+Q: Closes Window
 
 PROGRAMMING/REFACTORING:
     - Have a function that can map a callback function to an input
