@@ -2,6 +2,7 @@
 
 #include "TextEditor.h"
 #include "TextEditor_input.h"
+#include "TextEditor_string.h"
 
 #define INITIAL_LINE_SIZE 256
 #define CURSOR_HEIGHT 18
@@ -97,28 +98,6 @@ bool KeyCommandDown(KeyCommand keyCommand)
         result = result && InputHeld(input.leftShift);
     
     return result;
-}
-
-void IntToString(int val, char* buffer)
-{
-	char* at = buffer;
-    int len = 0;
-    do 
-    {
-        *at = (val % 10) + '0';
-        val /= 10;
-		len++;
-        at++;
-	} while (val > 0);
-
-    for (int i = 0; i < len / 2; ++i)
-    {
-        char temp = buffer[len - i - 1];
-        buffer[len - i - 1] = buffer[i];
-        buffer[i] = temp; 
-    }
-
-    buffer[len] = 0;
 }
 
 #define QuickSort(arr, len, elSize) qsort(arr, len, elSize, _qsortCompare)
@@ -470,7 +449,8 @@ void AddChar()
 {
     Line* line = &editor.lines[editor.cursorLineIndex];
 
-    line->len += (editor.currentChar == '\t') ? 4 : 1;
+    int numCharsAdded = (editor.currentChar == '\t') ? 4 : 1; 
+    line->len += numCharsAdded;
     if (line->len >= line->size)
     {
         line->size *= 2;
@@ -478,8 +458,8 @@ void AddChar()
     }
     //Shift right
     int offset = 4 * (editor.currentChar == '\t');
-    for (int i = line->len - 1; i > editor.cursorTextIndex + offset; --i)
-        line->text[i] = line->text[i-1];
+    for (int i = line->len - 1; i > editor.cursorTextIndex + offset - 1; --i)
+        line->text[i] = line->text[i - numCharsAdded];
     
     //Add character(s) and advance cursor
     char c = (editor.currentChar == '\t') ? ' ' : editor.currentChar;
@@ -604,7 +584,19 @@ void Backspace()
         RemoveChar();
 }
 
-void AddLine()
+//Inserts line without messing around with the cursor indicies
+void InsertLine()
+{
+    //Shift lines down
+    for (int i = editor.numLines; i > editor.cursorLineIndex; --i)
+    {
+        editor.lines[i] = editor.lines[i-1];
+    }
+	editor.lines[editor.cursorLineIndex] = InitLine();
+    editor.numLines++;
+}
+
+void Enter()
 {
     if (editor.numHighlightedLines)
     {
@@ -616,13 +608,7 @@ void AddLine()
         int prevLineIndex = editor.cursorLineIndex;
         editor.cursorLineIndex++;
 
-        //Shift lines down
-        for (int i = editor.numLines; i > editor.cursorLineIndex; --i)
-        {
-            editor.lines[i] = editor.lines[i-1];
-        }
-		editor.lines[editor.cursorLineIndex] = InitLine();
-        editor.numLines++;
+       InsertLine();
         
         int copiedLen = editor.lines[prevLineIndex].len - editor.cursorTextIndex;
         memcpy(
@@ -687,24 +673,53 @@ void CopyHighlightedText()
     CopyToClipboard(copiedText, copySize);
 }
 
-//TODO: handle replacing highlight, multiline pasting and string overflow
+//TODO: handle replacing highlight and string overflow
 void Paste()
 {
     char* textToPaste = GetClipboardText();
     if (textToPaste != nullptr)
     {
+        int numLinesToPaste = 0;
+        char** linesToPaste = SplitStringByLines(textToPaste, &numLinesToPaste);
+        free(textToPaste);
+
+        //Set up the lines before adding text to prevent pushint down the same lines being added
+        for (int _ = 1; _ < numLinesToPaste; ++_)
+            InsertLine();
+
+        //Paste text into first line
+        //TODO: Refactor this into a function to remove repetition
         Line* currentLine = &editor.lines[editor.cursorLineIndex];
-        size_t pasteLen = strlen(textToPaste);
+        size_t pasteLen = strlen(linesToPaste[0]);
         for (int i = 0; i < pasteLen; ++i)
         {
             int lineAt = editor.cursorTextIndex + i;
             currentLine->text[lineAt + pasteLen] = currentLine->text[lineAt];
-            currentLine->text[lineAt] = textToPaste[i];
+            currentLine->text[lineAt] = linesToPaste[0][i];
         }
         currentLine->len += (int)pasteLen;
         currentLine->text[currentLine->len] = 0;
-        editor.cursorTextIndex += (int)pasteLen;
-    }
+        free(linesToPaste[0]);
+
+        //Paste the text of the rest of the lines
+        for (int i = 1; i < numLinesToPaste; ++i)
+        {
+            Line* addedLine = &editor.lines[editor.cursorLineIndex + i];
+            size_t addedLen = strlen(linesToPaste[i]);
+            for (int c = 0; c < addedLen; ++c)
+            {
+                addedLine->text[c] = linesToPaste[i][c];
+            }
+            addedLine->len = (int)addedLen;
+            addedLine->text[addedLine->len] = 0;
+            free(linesToPaste[i]);
+        }
+        
+        editor.cursorLineIndex += numLinesToPaste - 1;
+        editor.cursorTextIndex = editor.lines[editor.cursorLineIndex].len;
+
+        free(linesToPaste);
+    }   
 }
 
 //TODO: Investigate Performance of this
@@ -810,7 +825,7 @@ void Draw(float dt)
 
         void (*inputCallbacks[])(void) = 
         {
-            AddLine, 
+            Enter, 
             Backspace, 
             MoveCursorForward, 
             MoveCursorBackward, 
@@ -887,12 +902,17 @@ void Draw(float dt)
     cursorPos.y -= editor.cursorLineIndex * CURSOR_HEIGHT;
     cursorPos.y -= PIXELS_UNDER_BASELINE; 
 
-    bool isWideChar = fontChars[editor.currentChar].width > fontChars[editor.currentChar].advance;
+    //All this shit here seems very dodgy, maybe refactor or just find a better method
     int xRightLimit = screenBuffer.width - 10;
     if (cursorPos.x >= xRightLimit)
-        editor.textOffset.x = max(editor.textOffset.x, cursorPos.x - xRightLimit); 
+        editor.textOffset.x = max(editor.textOffset.x, cursorPos.x - xRightLimit);
     else
         editor.textOffset.x = 0;
+
+    char cursorChar = editor.lines[editor.cursorLineIndex].text[editor.cursorTextIndex];
+    int xLeftLimit = start.x + editor.textOffset.x;
+    if (cursorPos.x < xLeftLimit)
+        editor.textOffset.x -= fontChars[cursorChar].advance;
 	cursorPos.x -= editor.textOffset.x;
 
     int yBottomLimit = CURSOR_HEIGHT;
@@ -900,6 +920,10 @@ void Draw(float dt)
         editor.textOffset.y = max(editor.textOffset.y, yBottomLimit - cursorPos.y);
     else
         editor.textOffset.y = 0;
+        
+    int yTopLimit = start.y - editor.textOffset.y;
+    if (cursorPos.y > yTopLimit)
+        editor.textOffset.y -= CURSOR_HEIGHT;
     cursorPos.y += editor.textOffset.y;
 
     Rect textBounds = {start.x, xRightLimit, yBottomLimit, 0};
