@@ -9,7 +9,6 @@ FEATURES:
     - Wrap Text
     - Find and Replace
     - The rest of the default commands (do some research)
-    - Smooth transitioning offcreen text
     - Mutiple tabs
     - Have brackets and quotes come in pairs
     - Multiline cursor
