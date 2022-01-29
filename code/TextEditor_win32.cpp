@@ -3,6 +3,8 @@
 #endif
 
 #include <windows.h> 
+#include <commdlg.h>
+
 #include "stdio.h"
 
 #include <ft2build.h>
@@ -11,6 +13,7 @@
 #include "TextEditor_defs.h"
 #include "TextEditor.h"
 #include "TextEditor_input.h"
+#include "TextEditor_string.h"
 
 Input input = {};
 FontChar fontChars[128];
@@ -21,16 +24,82 @@ global_variable bool running;
 
 wchar* CStrToWStr(const char *c)
 {
-    const size_t cSize = strlen(c)+1;
+    const size_t cSize = StringLen(c)+1;
     wchar* wc = (wchar*)malloc(cSize * sizeof(wchar));
     mbstowcs_s(0, wc, cSize, c, cSize+1);
 
     return wc;
 }
 
+inline uint32 SafeTruncateSize32(uint64 val)
+{
+    //TODO: Defines for max values
+    Assert(val <= 0xFFFFFFFF);
+    uint32 result = (uint32)val;
+    return result;
+}
+
 void Print(const char* message)
 {
     OutputDebugString(CStrToWStr(message));
+}
+
+char* ReadEntireFile(char* fileName, uint32* fileLen)
+{
+    char* result = nullptr;
+
+    HANDLE fileHandle = CreateFileA(
+        fileName, 
+        GENERIC_READ, 
+        FILE_SHARE_READ, 
+        0, 
+        OPEN_EXISTING, 
+        0, 0
+    );
+
+    if (fileHandle != INVALID_HANDLE_VALUE)
+    {
+        LARGE_INTEGER fileSize;
+        if (GetFileSizeEx(fileHandle, &fileSize))
+        {
+            uint32 fileSize32 = SafeTruncateSize32(fileSize.QuadPart);
+            result = (char*)VirtualAlloc(0, fileSize32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+            if (result)
+            {
+                DWORD bytesRead;
+                if(ReadFile(fileHandle, result, fileSize32, &bytesRead, 0) && 
+                   fileSize32 == bytesRead)
+                {
+                    //File read Successfully!
+                    if (fileLen)
+                    {
+                        *fileLen = fileSize32;
+                        Assert(result[*fileLen] == 0); //I do not know whether ReadFile null terminates, if you hit this, this means the issue is solved and it doesn't null terminate
+                    }   
+                }
+                else
+                {
+                    VirtualFree(result, 0, MEM_RELEASE);
+                    result = nullptr;
+                }
+            }
+            else
+            {
+                //Log
+            }
+        }
+        else
+        {
+            //Log
+        }
+        CloseHandle(fileHandle);
+    }
+    else
+    {
+        //Log
+    }
+
+    return result;
 }
 
 void CopyToClipboard(const char* text, size_t len)
@@ -87,6 +156,40 @@ char* GetClipboardText()
     }
 
     CloseClipboard();
+    return result;
+}
+
+char* OpenFileDialogAndGetFileName()
+{
+    char* result = nullptr;
+
+    OPENFILENAME ofn = {0};     // common dialog box structure
+    wchar chosenFileName[256];   // buffer for file name
+    chosenFileName[0] = 0;      // this ensures GetOpenFileName does not use the contents of szFile to initialize itself.
+
+    // Initialize OPENFILENAME
+    ofn.lStructSize = sizeof(ofn);
+    ofn.lpstrFile = chosenFileName;
+    ofn.nMaxFile = sizeof(chosenFileName);
+    ofn.lpstrFilter = L"All\0*.*\0Text\0*.TXT\0";
+    ofn.nFilterIndex = 1;
+    ofn.lpstrFileTitle = NULL;
+    ofn.nMaxFileTitle = 0;
+    ofn.lpstrInitialDir = NULL;
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+    // Display the Open dialog box. 
+    if (GetOpenFileName(&ofn))
+    {
+        size_t len = wcslen(chosenFileName);
+        result = (char*)malloc(len + 1);
+        wcstombs_s(0, result, len + 1, chosenFileName, len);
+        result[len] = 0;
+    } 
+
+    //NOTE: This is to prevent input not updating properly. Maybe find better approach idk
+    input = {0}; 
+
     return result;
 }
 
