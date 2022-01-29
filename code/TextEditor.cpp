@@ -476,6 +476,20 @@ void AddChar()
     }
 }
 
+//TODO: Prevent Overflow
+void InsertTextInLine(int lineIndex, char* text, int textStart)
+{
+    size_t textLen = StringLen(text);
+    for (int i = 0; i < textLen; ++i)
+    {
+        int lineAt = textStart + i;
+        editor.lines[lineIndex].text[lineAt + textLen] = editor.lines[lineIndex].text[lineAt];
+        editor.lines[lineIndex].text[lineAt] = text[i];
+    }
+    editor.lines[lineIndex].len += (int)textLen;
+    editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
+}
+
 void RemoveChar()
 {
     Line* line = &editor.lines[editor.cursorLineIndex];
@@ -491,17 +505,12 @@ void RemoveChar()
     }
     else if (editor.numLines > 1 && editor.cursorLineIndex > 0)
     {
-        //TODO: Prevent Overflow
-        int copiedLen = editor.lines[editor.cursorLineIndex].len;
-        Line* nextLine = &editor.lines[editor.cursorLineIndex - 1];
-		editor.cursorTextIndex = nextLine->len;
-        memcpy(
-            nextLine->text + nextLine->len, 
+        editor.cursorTextIndex = editor.lines[editor.cursorLineIndex - 1].len;
+        InsertTextInLine(
+            editor.cursorLineIndex - 1, 
             editor.lines[editor.cursorLineIndex].text, 
-            copiedLen
+            editor.lines[editor.cursorLineIndex - 1].len
         );
-        nextLine->len += copiedLen;
-        nextLine->text[nextLine->len] = 0;
 
 		//Shift lines up
 		for (int i = editor.cursorLineIndex; i < editor.numLines; ++i)
@@ -585,15 +594,15 @@ void Backspace()
 }
 
 //Inserts line without messing around with the cursor indicies
-void InsertLine()
+void InsertLineAt(int lineIndex)
 {
     //Shift lines down
-    for (int i = editor.numLines; i > editor.cursorLineIndex; --i)
+	editor.numLines++;
+    for (int i = editor.numLines - 1; i > lineIndex; --i)
     {
         editor.lines[i] = editor.lines[i-1];
     }
-	editor.lines[editor.cursorLineIndex] = InitLine();
-    editor.numLines++;
+	editor.lines[lineIndex] = InitLine();
 }
 
 void Enter()
@@ -608,7 +617,7 @@ void Enter()
         int prevLineIndex = editor.cursorLineIndex;
         editor.cursorLineIndex++;
 
-       InsertLine();
+       InsertLineAt(editor.cursorLineIndex);
         
         int copiedLen = editor.lines[prevLineIndex].len - editor.cursorTextIndex;
         memcpy(
@@ -684,34 +693,15 @@ void Paste()
         free(textToPaste);
 
         //Set up the lines before adding text to prevent pushint down the same lines being added
-        for (int _ = 1; _ < numLinesToPaste; ++_)
-            InsertLine();
+        for (int i = 1; i < numLinesToPaste; ++i)
+            InsertLineAt(editor.cursorLineIndex + i);
 
-        //Paste text into first line
-        //TODO: Refactor this into a function to remove repetition
-        Line* currentLine = &editor.lines[editor.cursorLineIndex];
-        size_t pasteLen = strlen(linesToPaste[0]);
-        for (int i = 0; i < pasteLen; ++i)
-        {
-            int lineAt = editor.cursorTextIndex + i;
-            currentLine->text[lineAt + pasteLen] = currentLine->text[lineAt];
-            currentLine->text[lineAt] = linesToPaste[0][i];
-        }
-        currentLine->len += (int)pasteLen;
-        currentLine->text[currentLine->len] = 0;
+        //Paste text
+        InsertTextInLine(editor.cursorLineIndex, linesToPaste[0], editor.cursorTextIndex);
         free(linesToPaste[0]);
-
-        //Paste the text of the rest of the lines
         for (int i = 1; i < numLinesToPaste; ++i)
         {
-            Line* addedLine = &editor.lines[editor.cursorLineIndex + i];
-            size_t addedLen = strlen(linesToPaste[i]);
-            for (int c = 0; c < addedLen; ++c)
-            {
-                addedLine->text[c] = linesToPaste[i][c];
-            }
-            addedLine->len = (int)addedLen;
-            addedLine->text[addedLine->len] = 0;
+            InsertTextInLine(editor.cursorLineIndex + i, linesToPaste[i], 0);
             free(linesToPaste[i]);
         }
         
@@ -720,6 +710,27 @@ void Paste()
 
         free(linesToPaste);
     }   
+}
+
+//TODO: Resize editor.lines if file too big
+void OpenFile()
+{
+    char* file = ReadEntireFile(OpenFileDialogAndGetFileName(), 0);
+    
+    int numLines = 0;
+    char** fileLines = SplitStringByLines(file, &numLines);
+
+    editor.numLines = numLines;
+    for (int i = 0; i < numLines; ++i)
+    {
+        int lineLen = StringLen(fileLines[i]);
+        memcpy(editor.lines[i].text, fileLines[i], lineLen);
+        editor.lines[i].len = lineLen;
+        editor.lines[i].text[lineLen] = 0;
+        free(fileLines[i]);
+    }
+
+    free(fileLines);
 }
 
 //TODO: Investigate Performance of this
@@ -867,14 +878,16 @@ void Draw(float dt)
             {
                 {CTRL, INPUTCODE_A},
                 {CTRL, INPUTCODE_C},
+                {CTRL, INPUTCODE_O},
                 {CTRL, INPUTCODE_V},
-                {CTRL, INPUTCODE_X}
+                {CTRL, INPUTCODE_X},
             };
 
             void (*keyCommandCallbacks[])(void) = 
             {
                 HighlightEntireFile,
                 CopyHighlightedText,
+                OpenFile,
                 Paste,
                 CutHighlightedText
             };
