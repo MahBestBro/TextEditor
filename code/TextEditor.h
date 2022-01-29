@@ -56,7 +56,11 @@ void Init();
 void Draw(float dt);
 void Print(const char* message);
 
+char* ReadEntireFile(char* fileName, uint32* fileLen);
+
 void CopyToClipboard(const char* text, size_t len);
 char* GetClipboardText();
+
+char* OpenFileDialogAndGetFileName();
 
 #endif
