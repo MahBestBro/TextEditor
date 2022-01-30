@@ -42,6 +42,7 @@ Line InitLine(const char* text = NULL)
         result.len = 0;
     }
     result.text[result.len] = 0;
+    result.changed = true;
     return result;  
 }
 
@@ -474,6 +475,8 @@ void AddChar()
             editor.cursorTextIndex++;
         }
     }
+
+    line->changed = true;
 }
 
 //TODO: Prevent Overflow
@@ -486,8 +489,10 @@ void InsertTextInLine(int lineIndex, char* text, int textStart)
         editor.lines[lineIndex].text[lineAt + textLen] = editor.lines[lineIndex].text[lineAt];
         editor.lines[lineIndex].text[lineAt] = text[i];
     }
+    int prevLen = editor.lines[lineIndex].len;
     editor.lines[lineIndex].len += (int)textLen;
     editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
+    editor.lines[lineIndex].changed = true;
 }
 
 void RemoveChar()
@@ -502,6 +507,7 @@ void RemoveChar()
 		}
         line->text[line->len] = 0;
         editor.cursorTextIndex--; 
+        line->changed = true;
     }
     else if (editor.numLines > 1 && editor.cursorLineIndex > 0)
     {
@@ -516,6 +522,7 @@ void RemoveChar()
 		for (int i = editor.cursorLineIndex; i < editor.numLines; ++i)
 		{
 			editor.lines[i] = editor.lines[i + 1];
+            editor.lines[i].changed = true;
 		}
 		editor.numLines--;
 
@@ -567,6 +574,7 @@ void RemoveHighlightedText()
     for (int i = topLineIndex + 1; i < editor.numLines; ++i)
     {
         editor.lines[i] = editor.lines[i + editor.numHighlightedLines - 1];
+        editor.lines[i].changed = editor.numHighlightedLines > 1;
     }
 
     //Remove Text from top line and connect bottom line text
@@ -580,6 +588,8 @@ void RemoveHighlightedText()
         editor.lines[topLineIndex].text[i + topHighlight.low] = remainingBottomText[i];
     }
     editor.lines[topLineIndex].text[editor.lines[topLineIndex].len] = 0;
+    editor.lines[topLineIndex].changed = true;
+    editor.numHighlightedLines = 0;
 
 	editor.cursorTextIndex = topHighlight.low;
 	free(remainingBottomText);
@@ -601,6 +611,7 @@ void InsertLineAt(int lineIndex)
     for (int i = editor.numLines - 1; i > lineIndex; --i)
     {
         editor.lines[i] = editor.lines[i-1];
+        editor.lines[i].changed = true;
     }
 	editor.lines[lineIndex] = InitLine();
 }
@@ -715,22 +726,53 @@ void Paste()
 //TODO: Resize editor.lines if file too big
 void OpenFile()
 {
-    char* file = ReadEntireFile(OpenFileDialogAndGetFileName(), 0);
-    
-    int numLines = 0;
-    char** fileLines = SplitStringByLines(file, &numLines);
-
-    editor.numLines = numLines;
-    for (int i = 0; i < numLines; ++i)
+    size_t fileNameLen = 0;
+    char* fileName = ShowFileDialogAndGetFileName(false, &fileNameLen);
+    char* file = ReadEntireFile(fileName);
+    if (file)
     {
-        int lineLen = StringLen(fileLines[i]);
-        memcpy(editor.lines[i].text, fileLines[i], lineLen);
-        editor.lines[i].len = lineLen;
-        editor.lines[i].text[lineLen] = 0;
-        free(fileLines[i]);
+        editor.fileName = (char*)malloc(fileNameLen + 1);
+        memcpy(editor.fileName, fileName, fileNameLen);
+        editor.fileName[fileNameLen] = 0;
+
+        int numLines = 0;
+        char** fileLines = SplitStringByLines(file, &numLines);
+
+        editor.numLines = numLines;
+        for (int i = 0; i < numLines; ++i)
+        {
+            int lineLen = StringLen(fileLines[i]);
+            memcpy(editor.lines[i].text, fileLines[i], lineLen);
+            editor.lines[i].len = lineLen;
+            editor.lines[i].text[lineLen] = 0;
+            editor.lines[i].changed = false;
+            free(fileLines[i]);
+        }
+
+        free(fileLines);
+    }
+}
+
+void SaveFile()
+{
+    size_t fileNameLen = 0;
+    char* fileName = ShowFileDialogAndGetFileName(true, &fileNameLen);
+    bool overwrite = fileName && editor.fileName && (strcmp(fileName, editor.fileName) == 0);
+    if(WriteLinesToFile(fileName, editor.lines, editor.numLines, overwrite))
+    {
+        if (!overwrite)
+        {
+            editor.fileName = (char*)malloc(fileNameLen + 1);
+            memcpy(editor.fileName, fileName, fileNameLen);
+            editor.fileName[fileNameLen] = 0;
+        }
+    }
+    else
+    {
+        //Log
     }
 
-    free(fileLines);
+
 }
 
 //TODO: Investigate Performance of this
@@ -780,6 +822,7 @@ void Draw(float dt)
                 if (editor.numHighlightedLines)
                     RemoveHighlightedText();
                 AddChar();
+
                 holdAction.elapsedTime = 0.0f;
 
                 charKeyDown = true;
@@ -879,6 +922,7 @@ void Draw(float dt)
                 {CTRL, INPUTCODE_A},
                 {CTRL, INPUTCODE_C},
                 {CTRL, INPUTCODE_O},
+                {CTRL, INPUTCODE_S},
                 {CTRL, INPUTCODE_V},
                 {CTRL, INPUTCODE_X},
             };
@@ -888,6 +932,7 @@ void Draw(float dt)
                 HighlightEntireFile,
                 CopyHighlightedText,
                 OpenFile,
+                SaveFile,
                 Paste,
                 CutHighlightedText
             };
