@@ -38,6 +38,8 @@ struct Line
 
 struct Editor
 {
+    char* fileName = nullptr;
+
     char currentChar = 0;
     Line lines[MAX_LINES];
     int numLines = 1;
@@ -56,11 +58,13 @@ void Init();
 void Draw(float dt);
 void Print(const char* message);
 
-char* ReadEntireFile(char* fileName, uint32* fileLen);
+char* ReadEntireFile(char* fileName, uint32* fileLen  = nullptr);
+bool WriteFile(char* fileName, char* text, uint64 textLen);
+bool WriteLinesToFile(char* fileName, Line* lines, int numLines, bool overwrite);
 
 void CopyToClipboard(const char* text, size_t len);
 char* GetClipboardText();
 
-char* OpenFileDialogAndGetFileName();
+char* ShowFileDialogAndGetFileName(bool save, size_t* fileNameLen = 0);
 
 #endif
