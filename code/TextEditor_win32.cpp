@@ -41,7 +41,9 @@ inline uint32 SafeTruncateSize32(uint64 val)
 
 void Print(const char* message)
 {
-    OutputDebugString(CStrToWStr(message));
+    wchar* msg = CStrToWStr(message);
+    OutputDebugString(msg);
+    free(msg);
 }
 
 char* ReadEntireFile(char* fileName, uint32* fileLen)
@@ -102,6 +104,93 @@ char* ReadEntireFile(char* fileName, uint32* fileLen)
     return result;
 }
 
+bool WriteFile(char* fileName, char* text, uint64 textLen)
+{
+    bool result = false;
+
+    HANDLE fileHandle = CreateFileA(fileName, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+    if (fileHandle != INVALID_HANDLE_VALUE)
+    {
+        DWORD bytesWritten;
+        if(WriteFile(fileHandle, text, (DWORD)textLen, &bytesWritten, 0))
+        {
+            //File written Successfully!
+            result = (bytesWritten == textLen);
+        }
+        else
+        {
+            //Log
+        }
+        CloseHandle(fileHandle);
+    }
+    else
+    {
+        //Log
+    }
+
+    return result;
+}
+
+bool WriteLinesToFile(char* fileName, Line* lines, int numLines, bool overwrite)
+{
+    bool result = true;
+
+    DWORD creationDisposition = (overwrite) ? OPEN_EXISTING : CREATE_ALWAYS;
+    HANDLE fileHandle = CreateFileA(fileName, GENERIC_WRITE, 0, 0, creationDisposition, 0, 0);
+    int filePointerAt = 0;
+    if (fileHandle != INVALID_HANDLE_VALUE)
+    {
+        for (int i = 0; i < numLines; ++i)
+        {
+            if (!lines[i].changed) 
+            {
+                filePointerAt += lines[i].len + 2 * (i < numLines - 1);
+
+                //TODO: handle when line to skip is huge
+                DWORD dwPtr = SetFilePointer(fileHandle, filePointerAt, NULL, FILE_BEGIN); 
+
+                if (dwPtr == INVALID_SET_FILE_POINTER) // Test for failure
+                { 
+                    //Log
+                    result = false;
+                }
+
+                continue;
+            }
+
+            //TODO: Make this UNIX compatible
+            uint64 writtenLen = lines[i].len + 2;
+            char* lineTextWithCRCL = (char*)malloc(writtenLen);
+            memcpy(lineTextWithCRCL, lines[i].text, lines[i].len);
+            lineTextWithCRCL[lines[i].len]     = '\r';
+            lineTextWithCRCL[lines[i].len + 1] = '\n';
+
+            DWORD bytesWritten;
+            if(WriteFile(fileHandle, lineTextWithCRCL, (DWORD)writtenLen, &bytesWritten, 0))
+            {
+                result = (bytesWritten == writtenLen) && result;
+            }
+            else
+            {
+                //Log
+                result = false;
+            }
+            
+            filePointerAt += (int)writtenLen;
+            free(lineTextWithCRCL);
+
+            lines[i].changed = false; //Maybe have this not be in this function?
+        }
+        CloseHandle(fileHandle);
+    }
+    else 
+    {
+        //Log
+    }
+
+    return result; 
+}
+
 void CopyToClipboard(const char* text, size_t len)
 {
     LPTSTR lptstrCopy; 
@@ -121,9 +210,11 @@ void CopyToClipboard(const char* text, size_t len)
         return; 
     }
 
-    lptstrCopy = (LPTSTR)GlobalLock(hglbCopy); 
-    memcpy(lptstrCopy, CStrToWStr(text), len * sizeof(wchar)); 
+    lptstrCopy = (LPTSTR)GlobalLock(hglbCopy);
+    wchar* wideText = CStrToWStr(text); 
+    memcpy(lptstrCopy, wideText, len * sizeof(wchar)); 
     lptstrCopy[len] = (wchar)0;    // null character 
+    free(wideText);
     GlobalUnlock(hglbCopy); 
 
     SetClipboardData(CF_UNICODETEXT, hglbCopy); 
@@ -159,7 +250,7 @@ char* GetClipboardText()
     return result;
 }
 
-char* OpenFileDialogAndGetFileName()
+char* ShowFileDialogAndGetFileName(bool save, size_t* fileNameLen)
 {
     char* result = nullptr;
 
@@ -179,17 +270,19 @@ char* OpenFileDialogAndGetFileName()
     ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 
     // Display the Open dialog box. 
-    if (GetOpenFileName(&ofn))
+    BOOL succeeded = (save) ? GetSaveFileName(&ofn) : GetOpenFileName(&ofn);
+    if (succeeded)
     {
         size_t len = wcslen(chosenFileName);
         result = (char*)malloc(len + 1);
         wcstombs_s(0, result, len + 1, chosenFileName, len);
         result[len] = 0;
+        if (fileNameLen) *fileNameLen = len;
     } 
 
     //NOTE: This is to prevent input not updating properly. Maybe find better approach idk
     input = {0}; 
-
+ 
     return result;
 }
 
