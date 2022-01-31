@@ -31,7 +31,7 @@ Line InitLine(const char* text = NULL)
 {
     Line result;
 	result.size = INITIAL_LINE_SIZE;
-    result.text = (char*)malloc(result.size);
+    result.text = HeapAlloc(char, result.size);
     if (text)
     {
         result.len = StringLen(text);
@@ -42,7 +42,6 @@ Line InitLine(const char* text = NULL)
         result.len = 0;
     }
     result.text[result.len] = 0;
-    result.changed = true;
     return result;  
 }
 
@@ -476,7 +475,10 @@ void AddChar()
         }
     }
 
-    line->changed = true;
+    if (editor.topChangedLineIndex != -1)
+        editor.topChangedLineIndex = min(editor.topChangedLineIndex, editor.cursorLineIndex);
+    else 
+        editor.topChangedLineIndex = editor.cursorLineIndex;
 }
 
 //TODO: Prevent Overflow
@@ -492,7 +494,6 @@ void InsertTextInLine(int lineIndex, char* text, int textStart)
     int prevLen = editor.lines[lineIndex].len;
     editor.lines[lineIndex].len += (int)textLen;
     editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
-    editor.lines[lineIndex].changed = true;
 }
 
 void RemoveChar()
@@ -507,7 +508,6 @@ void RemoveChar()
 		}
         line->text[line->len] = 0;
         editor.cursorTextIndex--; 
-        line->changed = true;
     }
     else if (editor.numLines > 1 && editor.cursorLineIndex > 0)
     {
@@ -522,12 +522,16 @@ void RemoveChar()
 		for (int i = editor.cursorLineIndex; i < editor.numLines; ++i)
 		{
 			editor.lines[i] = editor.lines[i + 1];
-            editor.lines[i].changed = true;
 		}
 		editor.numLines--;
 
         editor.cursorLineIndex--;
     }
+
+    if (editor.topChangedLineIndex != -1)
+        editor.topChangedLineIndex = min(editor.topChangedLineIndex, editor.cursorLineIndex);
+    else 
+        editor.topChangedLineIndex = editor.cursorLineIndex;
 }
 
 void RemoveHighlightedText()
@@ -563,7 +567,7 @@ void RemoveHighlightedText()
     //Get highlighted text on bottom line
     IntRange bottomHighlight = editor.highlightRanges[bottomLineIndex];
     const int remainingBottomLen = editor.lines[bottomLineIndex].len - bottomHighlight.high;
-    char* remainingBottomText = (char*)malloc(remainingBottomLen + 1);
+    char* remainingBottomText = HeapAlloc(char, remainingBottomLen + 1);
     memcpy(remainingBottomText, editor.lines[bottomLineIndex].text + bottomHighlight.high, 
            remainingBottomLen);
     remainingBottomText[remainingBottomLen] = 0;
@@ -574,7 +578,6 @@ void RemoveHighlightedText()
     for (int i = topLineIndex + 1; i < editor.numLines; ++i)
     {
         editor.lines[i] = editor.lines[i + editor.numHighlightedLines - 1];
-        editor.lines[i].changed = editor.numHighlightedLines > 1;
     }
 
     //Remove Text from top line and connect bottom line text
@@ -588,10 +591,13 @@ void RemoveHighlightedText()
         editor.lines[topLineIndex].text[i + topHighlight.low] = remainingBottomText[i];
     }
     editor.lines[topLineIndex].text[editor.lines[topLineIndex].len] = 0;
-    editor.lines[topLineIndex].changed = true;
+    
     editor.numHighlightedLines = 0;
-
 	editor.cursorTextIndex = topHighlight.low;
+    if (editor.topChangedLineIndex != -1)
+        editor.topChangedLineIndex = min(editor.topChangedLineIndex, editor.cursorLineIndex);
+    else 
+        editor.topChangedLineIndex = editor.cursorLineIndex;
 	free(remainingBottomText);
 }
 
@@ -611,7 +617,6 @@ void InsertLineAt(int lineIndex)
     for (int i = editor.numLines - 1; i > lineIndex; --i)
     {
         editor.lines[i] = editor.lines[i-1];
-        editor.lines[i].changed = true;
     }
 	editor.lines[lineIndex] = InitLine();
 }
@@ -658,7 +663,7 @@ void HighlightEntireFile()
 //TODO: Double check if this is susceptable to overflow attacks
 void CopyHighlightedText()
 {
-    int* highlightIndicies = (int*)malloc(editor.numHighlightedLines * sizeof(int));
+    int* highlightIndicies = HeapAlloc(int, editor.numHighlightedLines);
     memcpy(highlightIndicies, editor.highlightedLineIndicies, editor.numHighlightedLines * sizeof(int));
     QuickSort(highlightIndicies, editor.numHighlightedLines, sizeof(int));
 
@@ -672,7 +677,7 @@ void CopyHighlightedText()
 
     if (copySize <= 0) return;
 
-    char* copiedText = (char*)malloc(copySize + 1);
+    char* copiedText = HeapAlloc(char, copySize + 1);
     int at = 0;
     for (int i = 0; i < editor.numHighlightedLines; ++i)
     {
@@ -723,6 +728,15 @@ void Paste()
     }   
 }
 
+//TODO: Investigate Performance of this
+void CutHighlightedText()
+{
+    CopyHighlightedText();
+    RemoveHighlightedText();
+    ClearHighlights();
+}
+
+
 //TODO: Resize editor.lines if file too big
 void OpenFile()
 {
@@ -731,7 +745,7 @@ void OpenFile()
     char* file = ReadEntireFile(fileName);
     if (file)
     {
-        editor.fileName = (char*)malloc(fileNameLen + 1);
+        editor.fileName = HeapAlloc(char, fileNameLen + 1);
         memcpy(editor.fileName, fileName, fileNameLen);
         editor.fileName[fileNameLen] = 0;
 
@@ -745,24 +759,57 @@ void OpenFile()
             memcpy(editor.lines[i].text, fileLines[i], lineLen);
             editor.lines[i].len = lineLen;
             editor.lines[i].text[lineLen] = 0;
-            editor.lines[i].changed = false;
             free(fileLines[i]);
         }
 
         free(fileLines);
+        free(fileName);
+
+        editor.topChangedLineIndex = -1;
     }
 }
 
-void SaveFile()
+void SaveFile(char* fileName, size_t fileNameLen)
 {
-    size_t fileNameLen = 0;
-    char* fileName = ShowFileDialogAndGetFileName(true, &fileNameLen);
-    bool overwrite = fileName && editor.fileName && (strcmp(fileName, editor.fileName) == 0);
-    if(WriteLinesToFile(fileName, editor.lines, editor.numLines, overwrite))
+    if (editor.topChangedLineIndex == -1) return; 
+
+	bool overwrite = fileName && editor.fileName && (strcmp(fileName, editor.fileName) == 0);
+    
+    size_t textToWriteLen = 0;
+    int32 writeStart = 0;
+    for (int i = 0; i < editor.numLines; ++i)
+    {
+        //TODO: Make UNIX compatible
+        if (i >= editor.topChangedLineIndex)
+            textToWriteLen += editor.lines[i].len + 2 * (i != editor.numLines - 1);
+        else
+        {
+            Assert(i < editor.numLines - 1);
+            writeStart += editor.lines[i].len + 2;
+        }
+    }
+
+    char* textToWrite = HeapAlloc(char, textToWriteLen + 1);
+    uint64 at = 0;
+    for (int i = editor.topChangedLineIndex; i < editor.numLines; ++i)
+    {
+        memcpy(textToWrite + at, editor.lines[i].text, editor.lines[i].len);
+        at += editor.lines[i].len;
+        //TODO: Make UNIX compatible
+        if (i < editor.numLines - 1)
+        {
+            textToWrite[at]     = '\r';
+            textToWrite[at + 1] = '\n';
+        }
+        at += 2;
+    }
+    textToWrite[textToWriteLen] = 0;
+    
+    if(WriteFile(fileName, textToWrite, textToWriteLen, overwrite, writeStart))
     {
         if (!overwrite)
         {
-            editor.fileName = (char*)malloc(fileNameLen + 1);
+            editor.fileName = HeapRealloc(char, editor.fileName, fileNameLen + 1);
             memcpy(editor.fileName, fileName, fileNameLen);
             editor.fileName[fileNameLen] = 0;
         }
@@ -772,15 +819,28 @@ void SaveFile()
         //Log
     }
 
+    free(textToWrite);
+    free(fileName);
 
+    editor.topChangedLineIndex = -1;
 }
 
-//TODO: Investigate Performance of this
-void CutHighlightedText()
+void SaveAs()
 {
-    CopyHighlightedText();
-    RemoveHighlightedText();
-    ClearHighlights();
+	size_t fileNameLen = 0;
+	char* fileName = ShowFileDialogAndGetFileName(true, &fileNameLen);
+    SaveFile(fileName, fileNameLen);
+}
+
+void Save()
+{
+    if (editor.fileName)
+		SaveFile(editor.fileName, StringLen(editor.fileName));
+	else
+    {
+        Assert(editor.topChangedLineIndex != -1);
+		SaveAs();
+    }
 }
 
 TimedEvent cursorBlink = {0.5f};
@@ -923,6 +983,7 @@ void Draw(float dt)
                 {CTRL, INPUTCODE_C},
                 {CTRL, INPUTCODE_O},
                 {CTRL, INPUTCODE_S},
+                {CTRL | SHIFT, INPUTCODE_S},
                 {CTRL, INPUTCODE_V},
                 {CTRL, INPUTCODE_X},
             };
@@ -932,7 +993,8 @@ void Draw(float dt)
                 HighlightEntireFile,
                 CopyHighlightedText,
                 OpenFile,
-                SaveFile,
+                Save,
+                SaveAs,
                 Paste,
                 CutHighlightedText
             };
