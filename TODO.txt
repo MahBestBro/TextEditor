@@ -19,15 +19,14 @@ LIST OF COMMANDS TO IMPLEMENT:
     - Ctrl+F: Find
     - Ctrl+L: Highlights Line
     - Ctrl+N: Creates new text file
-    - Ctrl+O: Open File
     - Ctrl+Q: Close tab
-    - Ctrl+S: Save
     - Ctrl+T: Opens terminal (unlikely but would be cool)
     - Ctrl+Y: Redo
     - Ctrl+Z: Undo
+    - Ctrl++: Zoom in
+    - Ctrl+-: Zoom out
     -
     - Ctrl+Shift+C: Opens command prompt
-    - Ctrl+Shift+S: Save As
     - Ctrl+Shift+F: Highlights all instances of word in file
     - Ctrl+Shift+L: Delete Line
     - Ctrl+Shift+N: Opens New Window (do we want this?)
