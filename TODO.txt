@@ -4,7 +4,6 @@ FEATURES:
     - Undo and Redo stack
         - Actions are separated by invis characters, brackets and other non character input 
           actions (e.g. moving and backspace)
-    - Load and save file
     - Syntax highlighting
     - Wrap Text
     - Find and Replace
