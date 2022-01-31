@@ -104,18 +104,26 @@ char* ReadEntireFile(char* fileName, uint32* fileLen)
     return result;
 }
 
-bool WriteFile(char* fileName, char* text, uint64 textLen)
+bool WriteToFile(char* fileName, char* text, uint64 textLen, bool overwrite, int32 writeStart)
 {
     bool result = false;
 
-    HANDLE fileHandle = CreateFileA(fileName, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+    DWORD creationDisposition = (overwrite) ? OPEN_EXISTING : CREATE_ALWAYS;
+    HANDLE fileHandle = CreateFileA(fileName, GENERIC_WRITE, 0, 0, creationDisposition, 0, 0);
     if (fileHandle != INVALID_HANDLE_VALUE)
     {
+        Assert(writeStart >= 0);
+        //TODO: make possible for large changes
+        SetFilePointer(fileHandle, writeStart, NULL, FILE_BEGIN);
         DWORD bytesWritten;
         if(WriteFile(fileHandle, text, (DWORD)textLen, &bytesWritten, 0))
         {
             //File written Successfully!
             result = (bytesWritten == textLen);
+            if(!SetEndOfFile(fileHandle))
+            {
+                //Log
+            } 
         }
         else
         {
@@ -129,66 +137,6 @@ bool WriteFile(char* fileName, char* text, uint64 textLen)
     }
 
     return result;
-}
-
-bool WriteLinesToFile(char* fileName, Line* lines, int numLines, bool overwrite)
-{
-    bool result = true;
-
-    DWORD creationDisposition = (overwrite) ? OPEN_EXISTING : CREATE_ALWAYS;
-    HANDLE fileHandle = CreateFileA(fileName, GENERIC_WRITE, 0, 0, creationDisposition, 0, 0);
-    int filePointerAt = 0;
-    if (fileHandle != INVALID_HANDLE_VALUE)
-    {
-        for (int i = 0; i < numLines; ++i)
-        {
-            if (!lines[i].changed) 
-            {
-                filePointerAt += lines[i].len + 2 * (i < numLines - 1);
-
-                //TODO: handle when line to skip is huge
-                DWORD dwPtr = SetFilePointer(fileHandle, filePointerAt, NULL, FILE_BEGIN); 
-
-                if (dwPtr == INVALID_SET_FILE_POINTER) // Test for failure
-                { 
-                    //Log
-                    result = false;
-                }
-
-                continue;
-            }
-
-            //TODO: Make this UNIX compatible
-            uint64 writtenLen = lines[i].len + 2;
-            char* lineTextWithCRCL = (char*)malloc(writtenLen);
-            memcpy(lineTextWithCRCL, lines[i].text, lines[i].len);
-            lineTextWithCRCL[lines[i].len]     = '\r';
-            lineTextWithCRCL[lines[i].len + 1] = '\n';
-
-            DWORD bytesWritten;
-            if(WriteFile(fileHandle, lineTextWithCRCL, (DWORD)writtenLen, &bytesWritten, 0))
-            {
-                result = (bytesWritten == writtenLen) && result;
-            }
-            else
-            {
-                //Log
-                result = false;
-            }
-            
-            filePointerAt += (int)writtenLen;
-            free(lineTextWithCRCL);
-
-            lines[i].changed = false; //Maybe have this not be in this function?
-        }
-        CloseHandle(fileHandle);
-    }
-    else 
-    {
-        //Log
-    }
-
-    return result; 
 }
 
 void CopyToClipboard(const char* text, size_t len)
@@ -239,7 +187,7 @@ char* GetClipboardText()
         if (lptstr != NULL) 
         { 
             size_t len = wcslen(lptstr);
-            result = (char*)malloc(len + 1);
+            result = HeapAlloc(char, len + 1);
             wcstombs_s(0, result, len + 1, lptstr, len);
             result[len] = 0;
             GlobalUnlock(hglb); 
@@ -274,7 +222,7 @@ char* ShowFileDialogAndGetFileName(bool save, size_t* fileNameLen)
     if (succeeded)
     {
         size_t len = wcslen(chosenFileName);
-        result = (char*)malloc(len + 1);
+        result = HeapAlloc(char, len + 1);
         wcstombs_s(0, result, len + 1, chosenFileName, len);
         result[len] = 0;
         if (fileNameLen) *fileNameLen = len;
