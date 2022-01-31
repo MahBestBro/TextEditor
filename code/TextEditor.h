@@ -33,7 +33,6 @@ struct Line
     char* text;
     int size;
     int len;
-    bool changed;
 };
 
 struct Editor
@@ -43,6 +42,7 @@ struct Editor
     char currentChar = 0;
     Line lines[MAX_LINES];
     int numLines = 1;
+    int topChangedLineIndex = -1;
 
     int cursorTextIndex = 0;
     int cursorLineIndex = 0;
@@ -59,8 +59,7 @@ void Draw(float dt);
 void Print(const char* message);
 
 char* ReadEntireFile(char* fileName, uint32* fileLen  = nullptr);
-bool WriteFile(char* fileName, char* text, uint64 textLen);
-bool WriteLinesToFile(char* fileName, Line* lines, int numLines, bool overwrite);
+bool WriteFile(char* fileName, char* text, uint64 textLen, bool overwrite, int32 writeStart = 0);
 
 void CopyToClipboard(const char* text, size_t len);
 char* GetClipboardText();
