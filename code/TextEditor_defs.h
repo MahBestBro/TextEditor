@@ -13,10 +13,13 @@
 
 #define Xor(a, b) ( ((a) && !(b)) || (!(a) && (b)) )
 
-#define ArrayLen(arr) sizeof((arr)) / sizeof((arr)[0])
+#define ArrayLen(arr) (sizeof((arr)) / sizeof((arr)[0]))
 
-#define Clamp(x, lo, hi) max(min((x), (hi)), (lo))
+#define Clamp(x, lo, hi) (max(min((x), (hi)), (lo)))
 #define InRange(x, lo, hi) ((x) >= (lo) && (x) <= (hi))
+
+#define HeapAlloc(type, numEls) (type*)malloc((numEls) * sizeof(type))
+#define HeapRealloc(type, arr, numEls) (type*)realloc(arr, (numEls) * sizeof(type))
 
 #define PIXEL_IN_BYTES 4
 #define FONT_SIZE 13
@@ -25,6 +28,7 @@
 
 typedef uint8_t byte;
 typedef uint8_t uchar;
+
 typedef uint8_t uint8;
 typedef uint32_t uint32;
 typedef uint64_t uint64;
