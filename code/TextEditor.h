@@ -23,16 +23,21 @@ struct IntPair
     int x, y;
 };
 
-struct IntRange
-{
-    int low, high;
-};
-
 struct Line
 {
     char* text;
     int size;
     int len;
+};
+
+struct HighlightInfo
+{
+    int topHighlightStart = 0;
+    int topHighlightLen = 0;
+    int topLine = 0;
+    int bottomHighlightEnd = 0;
+    int bottomLine = 0;
+    bool spansOneLine = false;
 };
 
 struct Editor
@@ -47,9 +52,9 @@ struct Editor
     int cursorTextIndex = 0;
     int cursorLineIndex = 0;
 
-    IntRange highlightRanges[MAX_LINES];
-    int highlightedLineIndicies[MAX_LINES];
-    int numHighlightedLines = 0;
+    //Where the cursor was when user started highlighting
+    int initialHighlightTextIndex = -1;
+    int initialHighlightLineIndex = -1;
 
     IntPair textOffset = {};
 };
@@ -59,7 +64,7 @@ void Draw(float dt);
 void Print(const char* message);
 
 char* ReadEntireFile(char* fileName, uint32* fileLen  = nullptr);
-bool WriteFile(char* fileName, char* text, uint64 textLen, bool overwrite, int32 writeStart = 0);
+bool WriteToFile(char* fileName, char* text, uint64 textLen, bool overwrite, int32 writeStart = 0);
 
 void CopyToClipboard(const char* text, size_t len);
 char* GetClipboardText();
