@@ -265,95 +265,17 @@ global_variable Editor editor;
 
 void ClearHighlights()
 {
-    for (int i = 0; i < editor.numHighlightedLines; ++i)
-        editor.highlightRanges[editor.highlightedLineIndicies[i]] = {-1, -1};
-    editor.numHighlightedLines = 0;
+    editor.initialHighlightTextIndex = -1;
+    editor.initialHighlightLineIndex = -1;
 }
 
-void ExtendHighlightHorizontally(bool forward, int prevTextIndex)
+void InitHighlight(int initialTextIndex, int initialLineIndex)
 {
-    int highlightLen = abs(editor.cursorTextIndex - prevTextIndex);
-    IntRange* highlightRange = &editor.highlightRanges[editor.cursorLineIndex];
-    if (highlightRange->low == highlightRange->high) 
+    if (editor.initialHighlightTextIndex == -1)
     {
-        if (highlightRange->low == -1)
-            editor.highlightedLineIndicies[editor.numHighlightedLines++] = 
-                editor.cursorLineIndex;
-        highlightRange->low  = editor.cursorTextIndex - (forward) * highlightLen;
-        highlightRange->high = editor.cursorTextIndex + (!forward) * highlightLen;
-    }
-    else
-    { 
-        int lowCursorDist = abs(editor.cursorTextIndex - highlightRange->low);
-        int highCursorDist =  abs(editor.cursorTextIndex - highlightRange->high);
-        int prioritisedDist = (forward) ? lowCursorDist : highCursorDist;
-        int nonPrioritisedDist = (forward) ? highCursorDist : lowCursorDist;
-
-        if (prioritisedDist <= nonPrioritisedDist || nonPrioritisedDist == 0)
-        {
-            highlightRange->low  +=  forward * highlightLen;
-            highlightRange->high -= !forward * highlightLen;
-        }
-        else
-        {
-            highlightRange->low  -= !forward * highlightLen;
-            highlightRange->high +=  forward * highlightLen;
-        }
-    }
-}
-
-//By "Transitioning Line" I mean moving from end of one line to start of another with left
-//and right keys.
-void ExtendHighlightTransitioningLine(bool forward)
-{
-    IntRange* highlightRange = &editor.highlightRanges[editor.cursorLineIndex];
-    if (highlightRange->low == -1)
-    {
-        Assert(highlightRange->high == -1);
-        editor.highlightedLineIndicies[editor.numHighlightedLines++] = 
-            editor.cursorLineIndex;
-        highlightRange->low  = editor.lines[editor.cursorLineIndex].len;
-        highlightRange->high = editor.lines[editor.cursorLineIndex].len;
-    }
-    else
-    {
-        int direction = (forward) ? -1 : 1;
-        editor.numHighlightedLines--;
-        editor.highlightRanges[editor.cursorLineIndex + direction] = {-1, -1};
-    }
-}
-
-void ExtendHighlightVertically(bool up, int prevTextIndex = 0)
-{
-    IntRange* upperHighlightRange = &editor.highlightRanges[editor.cursorLineIndex - !up];
-    IntRange* lowerHighlightRange = &editor.highlightRanges[editor.cursorLineIndex +  up];
-    IntRange* prioritisedRange = (up) ? upperHighlightRange : lowerHighlightRange;
-    IntRange* nonPrioritisedRange = (up) ? lowerHighlightRange : upperHighlightRange;
-    if (prioritisedRange->low == -1)
-    {
-        int direction = (up) ? 1 : -1;
-        Assert(prioritisedRange->high == -1);
-		if (nonPrioritisedRange->low == -1)
-        {
-			editor.highlightedLineIndicies[editor.numHighlightedLines++] = 
-                editor.cursorLineIndex + direction;
-        }
-        editor.highlightedLineIndicies[editor.numHighlightedLines++] = 
-            editor.cursorLineIndex;
-
-        //idk how to make this more straightforward, maybe redo??
-        if (up || upperHighlightRange->low == -1)  
-            upperHighlightRange->low  = editor.cursorTextIndex;
-        lowerHighlightRange->low  = 0;
-        upperHighlightRange->high = editor.lines[editor.cursorLineIndex - (!up)].len;
-        lowerHighlightRange->high = (up) ? max(prevTextIndex, lowerHighlightRange->high) : 
-                                           editor.cursorTextIndex;
-    }
-    else
-    {
-        editor.numHighlightedLines--;
-        *nonPrioritisedRange = {-1, -1};
-        prioritisedRange->high = editor.cursorTextIndex;
+        Assert(editor.initialHighlightLineIndex == -1);
+        editor.initialHighlightTextIndex = initialTextIndex;
+        editor.initialHighlightLineIndex = initialLineIndex;
     }
 }
 
@@ -372,27 +294,61 @@ void AdvanceCursorToEndOfWord(bool forward)
            skipNonAlphaNumericChars);
 }
 
+HighlightInfo GetHighlightInfo()
+{
+    HighlightInfo result;
+    if (editor.initialHighlightLineIndex > editor.cursorLineIndex)
+    {
+        result.topHighlightStart = editor.cursorTextIndex;
+        result.topLine = editor.cursorLineIndex;
+        result.bottomHighlightEnd = editor.initialHighlightTextIndex;
+        result.bottomLine = editor.initialHighlightLineIndex;
+        result.topHighlightLen = editor.lines[result.topLine].len - result.topHighlightStart;
+    }
+    else if (editor.initialHighlightLineIndex < editor.cursorLineIndex)
+    {
+        result.topHighlightStart = editor.initialHighlightTextIndex;
+        result.topLine = editor.initialHighlightLineIndex;
+        result.bottomHighlightEnd = editor.cursorTextIndex;
+        result.bottomLine = editor.cursorLineIndex;
+        result.topHighlightLen = editor.lines[result.topLine].len - result.topHighlightStart;
+    }
+    else
+    {
+        result.topHighlightStart = min(editor.initialHighlightTextIndex, editor.cursorTextIndex);
+        result.topLine = editor.cursorLineIndex;
+        result.bottomHighlightEnd = max(editor.initialHighlightTextIndex, editor.cursorTextIndex);
+        result.bottomLine = result.topLine;
+        result.spansOneLine = true;
+        result.topHighlightLen = result.bottomHighlightEnd - result.topHighlightStart;
+    }
+
+    return result;
+}
+
 void MoveCursorForward()
 {
     if (editor.cursorTextIndex < editor.lines[editor.cursorLineIndex].len)
     {
-        int prevTextIndex = editor.cursorTextIndex;  
+        int prevTextIndex = editor.cursorTextIndex;
         if (InputHeld(input.leftCtrl))
             AdvanceCursorToEndOfWord(true);
         else
             editor.cursorTextIndex++;
 
         if (InputHeld(input.leftShift))
-            ExtendHighlightHorizontally(true, prevTextIndex);
+            InitHighlight(prevTextIndex, editor.cursorLineIndex);
     }
     else if (editor.cursorLineIndex < editor.numLines - 1)
     {
         //Go down a line
         editor.cursorLineIndex++;
         editor.cursorTextIndex = 0;
+        if (InputHeld(input.leftCtrl))
+            AdvanceCursorToEndOfWord(true);
 
         if (InputHeld(input.leftShift))
-            ExtendHighlightTransitioningLine(true);
+            InitHighlight(editor.lines[editor.cursorLineIndex - 1].len, editor.cursorLineIndex - 1);
     }
 }
 
@@ -400,23 +356,25 @@ void MoveCursorBackward()
 {
     if (editor.cursorTextIndex > 0)
     {
-        int prevTextIndex = editor.cursorTextIndex;  
+        int prevTextIndex = editor.cursorTextIndex;
         if (InputHeld(input.leftCtrl))
             AdvanceCursorToEndOfWord(false);
         else
             editor.cursorTextIndex--;
 
         if (InputHeld(input.leftShift))
-            ExtendHighlightHorizontally(false, prevTextIndex);
+            InitHighlight(prevTextIndex, editor.cursorLineIndex);
     }
     else if (editor.cursorLineIndex > 0)
     {
         //Go up a line
         editor.cursorLineIndex--;
         editor.cursorTextIndex = editor.lines[editor.cursorLineIndex].len;
+        if (InputHeld(input.leftCtrl))
+            AdvanceCursorToEndOfWord(false);
 
         if (InputHeld(input.leftShift))
-            ExtendHighlightTransitioningLine(false);
+            InitHighlight(0, editor.cursorLineIndex + 1);
     }
 }
 
@@ -425,11 +383,11 @@ void MoveCursorUp()
 {
     if (editor.cursorLineIndex > 0)
     {
-        int prevTextIndex = editor.cursorTextIndex;
+        int prevTextIndex = editor.cursorTextIndex; 
         editor.cursorLineIndex--; 
         editor.cursorTextIndex = min(editor.cursorTextIndex, editor.lines[editor.cursorLineIndex].len);
         if (InputHeld(input.leftShift))
-            ExtendHighlightVertically(true, prevTextIndex);
+            InitHighlight(prevTextIndex, editor.cursorLineIndex + 1);
     }
 }
 
@@ -438,10 +396,11 @@ void MoveCursorDown()
 {
     if (editor.cursorLineIndex < editor.numLines - 1)
     {
+        int prevTextIndex = editor.cursorTextIndex; 
         editor.cursorLineIndex++;
         editor.cursorTextIndex = min(editor.cursorTextIndex, editor.lines[editor.cursorLineIndex].len);
         if (InputHeld(input.leftShift))
-            ExtendHighlightVertically(false);
+            InitHighlight(prevTextIndex, editor.cursorLineIndex - 1);
     }
 }   
 
@@ -536,74 +495,58 @@ void RemoveChar()
 
 void RemoveHighlightedText()
 {   
-    //Move cursor and find top and bottom lines
-    int lastLineIndex = 0, secondLastLineIndex = 0; 
-    int bottomLineIndex = editor.cursorLineIndex;
-    int topLineIndex = editor.cursorLineIndex; 
-    if (editor.numHighlightedLines > 1)
-    {
-        lastLineIndex = editor.highlightedLineIndicies[editor.numHighlightedLines-1];
-        secondLastLineIndex = editor.highlightedLineIndicies[editor.numHighlightedLines-2];
-        const int topHighlightIndex = editor.highlightedLineIndicies[0];
-
-        //This if condition scares me, hopefully it's fine rn but it keeps on creating bugs
-        if (lastLineIndex > secondLastLineIndex)
-        {
-            bottomLineIndex = lastLineIndex;
-            topLineIndex = topHighlightIndex;
-            editor.cursorTextIndex = editor.highlightRanges[topLineIndex].low;
-            editor.cursorLineIndex = topLineIndex;
-        }
-        else
-        {
-            bottomLineIndex = editor.highlightedLineIndicies[0];
-            topLineIndex = lastLineIndex;
-        }
-    }
-
-    Assert(editor.cursorTextIndex >= 0);
-    
+    HighlightInfo highlightInfo = GetHighlightInfo();
 
     //Get highlighted text on bottom line
-    IntRange bottomHighlight = editor.highlightRanges[bottomLineIndex];
-    const int remainingBottomLen = editor.lines[bottomLineIndex].len - bottomHighlight.high;
-    char* remainingBottomText = HeapAlloc(char, remainingBottomLen + 1);
-    memcpy(remainingBottomText, editor.lines[bottomLineIndex].text + bottomHighlight.high, 
-           remainingBottomLen);
-    remainingBottomText[remainingBottomLen] = 0;
+    char* remainingBottomText = nullptr;
+    int remainingBottomLen = 0;
+    if (!highlightInfo.spansOneLine)
+    { 
+        remainingBottomLen = 
+            editor.lines[highlightInfo.bottomLine].len - highlightInfo.bottomHighlightEnd;
+        remainingBottomText = HeapAlloc(char, remainingBottomLen + 1);
+        memcpy(remainingBottomText, 
+               editor.lines[highlightInfo.bottomLine].text + highlightInfo.bottomHighlightEnd, 
+               remainingBottomLen);
+        remainingBottomText[remainingBottomLen] = 0;
+    }    
 
     //Shift lines below highlited section up
-	editor.numLines -= editor.numHighlightedLines - 1;
-    Assert(editor.cursorLineIndex < editor.numLines);
-    for (int i = topLineIndex + 1; i < editor.numLines; ++i)
+    editor.numLines -= highlightInfo.bottomLine - highlightInfo.topLine;
+    for (int i = highlightInfo.topLine + 1; i < editor.numLines; ++i)
     {
-        editor.lines[i] = editor.lines[i + editor.numHighlightedLines - 1];
+        editor.lines[i] = editor.lines[i + highlightInfo.bottomLine - highlightInfo.topLine];
     }
 
     //Remove Text from top line and connect bottom line text
     //TODO: realloc if not bottom line length > topLine.size
-    IntRange topHighlight = editor.highlightRanges[topLineIndex];
-    const int topRemovedLen = topHighlight.high - topHighlight.low;
-    bool multipleHighlights = (editor.numHighlightedLines > 1);
-    editor.lines[topLineIndex].len += remainingBottomLen * (multipleHighlights) - topRemovedLen;
-    for (int i = 0; i < remainingBottomLen; ++i)
-    {
-        editor.lines[topLineIndex].text[i + topHighlight.low] = remainingBottomText[i];
-    }
-    editor.lines[topLineIndex].text[editor.lines[topLineIndex].len] = 0;
-    
-    editor.numHighlightedLines = 0;
-	editor.cursorTextIndex = topHighlight.low;
+    const int topRemovedLen = highlightInfo.topHighlightLen;
+    memcpy(
+        editor.lines[highlightInfo.topLine].text + highlightInfo.topHighlightStart, 
+        editor.lines[highlightInfo.topLine].text + highlightInfo.topHighlightStart + topRemovedLen,
+        editor.lines[highlightInfo.topLine].len - (highlightInfo.topHighlightStart + topRemovedLen)
+    );
+    editor.lines[highlightInfo.topLine].len += remainingBottomLen - topRemovedLen;
+    memcpy(editor.lines[highlightInfo.topLine].text + highlightInfo.topHighlightStart, 
+           remainingBottomText, 
+           remainingBottomLen);
+    editor.lines[highlightInfo.topLine].text[editor.lines[highlightInfo.topLine].len] = 0;
+
+    editor.cursorLineIndex = highlightInfo.topLine;
+	editor.cursorTextIndex = highlightInfo.topHighlightStart;
     if (editor.topChangedLineIndex != -1)
         editor.topChangedLineIndex = min(editor.topChangedLineIndex, editor.cursorLineIndex);
     else 
         editor.topChangedLineIndex = editor.cursorLineIndex;
-	free(remainingBottomText);
+
+	ClearHighlights();
+
+	if (remainingBottomText) free(remainingBottomText);
 }
 
 void Backspace()
 {
-    if (editor.numHighlightedLines)
+    if (editor.initialHighlightTextIndex != -1)
         RemoveHighlightedText();
     else
         RemoveChar();
@@ -623,7 +566,7 @@ void InsertLineAt(int lineIndex)
 
 void Enter()
 {
-    if (editor.numHighlightedLines)
+    if (editor.initialHighlightTextIndex != -1)
     {
         RemoveHighlightedText();
     }
@@ -652,50 +595,57 @@ void Enter()
 
 void HighlightEntireFile()
 {
-    editor.numHighlightedLines = 0;
-    for (int i = 0; i < editor.numLines; ++i)
-    {
-        editor.highlightRanges[i] = {0, editor.lines[i].len};
-        editor.highlightedLineIndicies[editor.numHighlightedLines++] = i;
-    }
+    editor.initialHighlightTextIndex = 0;
+    editor.initialHighlightLineIndex = 0;
+    editor.cursorTextIndex = editor.lines[editor.numLines - 1].len;
+    editor.cursorLineIndex = editor.numLines - 1;
 }
 
-//TODO: Double check if this is susceptable to overflow attacks
+//TODO: Double check if this is susceptable to overflow attacks and Unix Compatability
 void CopyHighlightedText()
 {
-    int* highlightIndicies = HeapAlloc(int, editor.numHighlightedLines);
-    memcpy(highlightIndicies, editor.highlightedLineIndicies, editor.numHighlightedLines * sizeof(int));
-    QuickSort(highlightIndicies, editor.numHighlightedLines, sizeof(int));
-
-    size_t copySize = 0;
-    for (int i = 0; i < editor.numHighlightedLines; ++i)
+    if (editor.initialHighlightTextIndex == -1) 
     {
-        int l = highlightIndicies[i];
-        copySize += editor.highlightRanges[l].high - editor.highlightRanges[l].low;
-        if (i != editor.numHighlightedLines - 1) copySize += 2;
+        Assert(editor.initialHighlightLineIndex == -1);
+        return;
     }
 
-    if (copySize <= 0) return;
+    HighlightInfo highlightInfo = GetHighlightInfo();
+
+    size_t copySize = highlightInfo.topHighlightLen + 2 * (!highlightInfo.spansOneLine);
+    for (int i = highlightInfo.topLine + 1; i < highlightInfo.bottomLine ; ++i)
+    {
+        copySize += editor.lines[i].len + 2;
+    }
+    if (!highlightInfo.spansOneLine) copySize += highlightInfo.bottomHighlightEnd;
 
     char* copiedText = HeapAlloc(char, copySize + 1);
-    int at = 0;
-    for (int i = 0; i < editor.numHighlightedLines; ++i)
+    memcpy(copiedText, 
+           editor.lines[highlightInfo.topLine].text + highlightInfo.topHighlightStart, 
+           highlightInfo.topHighlightLen);
+	int at = highlightInfo.topHighlightLen;
+	if (!highlightInfo.spansOneLine)
+	{
+		copiedText[highlightInfo.topHighlightLen]     = '\r';
+		copiedText[highlightInfo.topHighlightLen + 1] = '\n';
+		at += 2;
+	}
+    for (int i = highlightInfo.topLine + 1; i < highlightInfo.bottomLine; ++i)
     {
-        int l = highlightIndicies[i];
-        char* highlightedText = editor.lines[l].text + editor.highlightRanges[l].low;
-        size_t size = editor.highlightRanges[l].high - editor.highlightRanges[l].low; 
-        memcpy(copiedText + at, highlightedText, size);
-        if (i != editor.numHighlightedLines - 1)
-        {
-            copiedText[at + size] = '\r'; 
-            copiedText[at + size + 1] = '\n'; 
-            at += 2;
-        }
-        at += (int)size;
+        memcpy(copiedText + at, editor.lines[i].text, editor.lines[i].len);
+        copiedText[at + editor.lines[i].len]     = '\r'; 
+        copiedText[at + editor.lines[i].len + 1] = '\n'; 
+        at += editor.lines[i].len + 2;
     }
+    if (!highlightInfo.spansOneLine) 
+        memcpy(copiedText + at, 
+               editor.lines[highlightInfo.bottomLine].text, 
+               highlightInfo.bottomHighlightEnd);
     copiedText[copySize] = 0;
 
     CopyToClipboard(copiedText, copySize);
+
+    free(copiedText);
 }
 
 //TODO: handle replacing highlight and string overflow
@@ -805,7 +755,7 @@ void SaveFile(char* fileName, size_t fileNameLen)
     }
     textToWrite[textToWriteLen] = 0;
     
-    if(WriteFile(fileName, textToWrite, textToWriteLen, overwrite, writeStart))
+    if(WriteToFile(fileName, textToWrite, textToWriteLen, overwrite, writeStart))
     {
         if (!overwrite)
         {
@@ -858,7 +808,6 @@ void Init()
     for (int i = 0; i < MAX_LINES; ++i)
     {
         editor.lines[i] = InitLine();
-        editor.highlightRanges[i] = {-1, -1};
     }
 }
 
@@ -879,7 +828,7 @@ void Draw(float dt)
                 InputHeld(input.leftShift), 
                 capslockOn);
                 editor.currentChar = charOfKeyPressed;
-                if (editor.numHighlightedLines)
+                if (editor.initialHighlightTextIndex != -1)
                     RemoveHighlightedText();
                 AddChar();
 
@@ -1063,18 +1012,64 @@ void Draw(float dt)
     }
 
     //Draw highlighted text
-    for (int i = 0; i < editor.numHighlightedLines; ++i)
+    if (editor.initialHighlightTextIndex != -1) 
     {
-        int l = editor.highlightedLineIndicies[i];
-        const int textSize = editor.highlightRanges[l].high - editor.highlightRanges[l].low;
-        char* lineText = editor.lines[l].text;
-        int highlightedPixelLength = TextPixelLength(lineText, editor.highlightRanges[l].low); 
-        int x = start.x + highlightedPixelLength - editor.textOffset.x;
-        int y = start.y - l * CURSOR_HEIGHT - PIXELS_UNDER_BASELINE + editor.textOffset.y;
-        int xOffset = TextPixelLength(lineText + editor.highlightRanges[l].low, textSize);
-        if (editor.lines[l].len == 0) xOffset = fontChars[' '].advance;
-        DrawAlphaRect({x, x + xOffset, y, y + CURSOR_HEIGHT}, {0, 255, 0, 255 / 3}, textBounds);
+        Assert(editor.initialHighlightLineIndex != -1);
+        HighlightInfo highlightInfo = GetHighlightInfo();
+        
+        //Draw top line highlight
+        char* topHighlightText = 
+            editor.lines[highlightInfo.topLine].text + highlightInfo.topHighlightStart;;
+        const int topHighlightPixelLength = 
+            TextPixelLength(topHighlightText, highlightInfo.topHighlightLen);
+		int topXOffset = 
+            TextPixelLength(editor.lines[highlightInfo.topLine].text, highlightInfo.topHighlightStart);
+        int topX = start.x + topXOffset - editor.textOffset.x;
+        int topY = start.y - highlightInfo.topLine * CURSOR_HEIGHT - PIXELS_UNDER_BASELINE + 
+                   editor.textOffset.y;
+        if (editor.lines[highlightInfo.topLine].len == 0) topXOffset = fontChars[' '].advance;
+        DrawAlphaRect(
+            {topX, topX + topHighlightPixelLength, topY, topY + CURSOR_HEIGHT},
+            {0, 255, 0, 255 / 3}, 
+            textBounds
+        );
+
+        //Draw inbetween highlights
+        for (int i = highlightInfo.topLine + 1; i < highlightInfo.bottomLine; ++i)
+        {
+            int highlightLen = editor.lines[i].len;
+            char* lineText = editor.lines[i].text;
+            int highlightedPixelLength = TextPixelLength(editor.lines[i].text, editor.lines[i].len); 
+            if (editor.lines[i].len == 0) highlightedPixelLength = fontChars[' '].advance;
+            int x = start.x - editor.textOffset.x;
+            int y = start.y - i * CURSOR_HEIGHT - PIXELS_UNDER_BASELINE + editor.textOffset.y;
+            DrawAlphaRect(
+                {x, x + highlightedPixelLength, y, y + CURSOR_HEIGHT}, 
+                {0, 255, 0, 255 / 3}, 
+                textBounds
+            );
+        }
+
+        //Draw bottom line highlight
+        if (!highlightInfo.spansOneLine)
+        {
+            int bottomHighlightPixelLength = 
+                TextPixelLength(editor.lines[highlightInfo.bottomLine].text, 
+                                highlightInfo.bottomHighlightEnd);
+            int bottomX = start.x - editor.textOffset.x;
+            int bottomY = start.y - highlightInfo.bottomLine * CURSOR_HEIGHT 
+                          - PIXELS_UNDER_BASELINE + editor.textOffset.y;
+            if (editor.lines[highlightInfo.bottomLine].len == 0) 
+                bottomHighlightPixelLength = fontChars[' '].advance;
+            DrawAlphaRect(
+                {bottomX, bottomX + bottomHighlightPixelLength, bottomY, bottomY + CURSOR_HEIGHT}, 
+                {0, 255, 0, 255 / 3}, 
+                textBounds
+            );
+        }
+        
     }
+    
 
 
     cursorBlink.elapsedTime += dt;
