@@ -23,6 +23,12 @@ struct IntPair
     int x, y;
 };
 
+struct EditorPos
+{
+    int textAt;
+    int line;
+};
+
 struct Line
 {
     char* text;
@@ -30,14 +36,23 @@ struct Line
     int len;
 };
 
-struct HighlightInfo
+struct TextSectionInfo
 {
-    int topHighlightStart = 0;
-    int topHighlightLen = 0;
+    int topTextStart = 0;
+    int topLen = 0;
     int topLine = 0;
-    int bottomHighlightEnd = 0;
+    int bottomTextEnd = 0;
     int bottomLine = 0;
     bool spansOneLine = false;
+};
+
+struct UndoInfo
+{
+    TextSectionInfo sectionInfo;
+    EditorPos undoStart;
+    char** textByLine;
+    bool textAdded;
+    bool wasHighlight;
 };
 
 struct Editor
@@ -49,12 +64,18 @@ struct Editor
     int numLines = 1;
     int topChangedLineIndex = -1;
 
-    int cursorTextIndex = 0;
-    int cursorLineIndex = 0;
+    EditorPos cursorPos = {0};
 
     //Where the cursor was when user started highlighting
-    int initialHighlightTextIndex = -1;
-    int initialHighlightLineIndex = -1;
+    EditorPos highlightStart = {-1, -1};
+
+    EditorPos undoStart = {-1, -1};
+    bool undoTextAdded = false;
+    bool undoWasHighlighted = false;
+    UndoInfo undoStack[MAX_UNDOS];
+    int numUndos = 0;
+    UndoInfo redoStack[MAX_UNDOS];
+    int numRedos = 0;
 
     IntPair textOffset = {};
 };
