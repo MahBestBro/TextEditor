@@ -46,12 +46,21 @@ struct TextSectionInfo
     bool spansOneLine = false;
 };
 
+enum UndoType
+{
+    UNDOTYPE_ADDED_TEXT,
+    UNDOTYPE_OVERWRITE,
+    UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER,
+    UNDOTYPE_REMOVED_TEXT_SECTION,
+};
+
 struct UndoInfo
 {
-    TextSectionInfo sectionInfo;
+    //TextSectionInfo sectionInfo;
     EditorPos undoStart;
+    EditorPos undoEnd;
     char** textByLine;
-    bool textAdded;
+    UndoType type;
     bool wasHighlight;
 };
 
@@ -69,9 +78,10 @@ struct Editor
     //Where the cursor was when user started highlighting
     EditorPos highlightStart = {-1, -1};
 
-    EditorPos undoStart = {-1, -1};
-    bool undoTextAdded = false;
-    bool undoWasHighlighted = false;
+    //EditorPos undoStart = {-1, -1};
+    //bool undoTextAdded = false;
+    //bool undoWasHighlighted = false;
+    bool lastActionWasUndo = false;
     UndoInfo undoStack[MAX_UNDOS];
     int numUndos = 0;
     UndoInfo redoStack[MAX_UNDOS];
