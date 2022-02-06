@@ -25,6 +25,7 @@
 #define FONT_SIZE 13
 
 #define MAX_LINES 256
+#define MAX_UNDOS 256
 
 typedef uint8_t byte;
 typedef uint8_t uchar;
