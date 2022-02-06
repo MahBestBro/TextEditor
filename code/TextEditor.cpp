@@ -451,14 +451,6 @@ void AddChar()
     EditorPos nextPos = {editor.cursorPos.textAt + numCharsAdded, editor.cursorPos.line};
     UndoInfo* currentUndo = &editor.undoStack[editor.numUndos];
 
-
-    //if (editor.numUndos == 0)
-    //{
-    //    *currentUndo = InitUndoInfo(editor.cursorPos, 
-    //                                nextPos, 
-    //                                UNDOTYPE_ADDED_TEXT,
-    //                                false);
-    //}
     if (editor.currentChar == ' ' || editor.currentChar == '\t' || 
         currentUndo->type != UNDOTYPE_ADDED_TEXT || editor.cursorPos != currentUndo->undoEnd)
     {
@@ -525,13 +517,6 @@ void RemoveChar()
 {
     UndoInfo* currentUndo = &editor.undoStack[editor.numUndos];
 
-    //if (editor.numUndos == 0)
-    //{
-    //    *currentUndo  = InitUndoInfo(editor.cursorPos, 
-    //                                 editor.cursorPos, 
-    //                                 UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER,
-    //                                 false);
-    //}
     if (currentUndo->type != UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER || 
              editor.cursorPos != currentUndo->undoEnd)
     {
