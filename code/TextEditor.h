@@ -56,13 +56,22 @@ enum UndoType
 
 struct UndoInfo
 {
-    //TextSectionInfo sectionInfo;
     EditorPos undoStart;
     EditorPos undoEnd;
-    char** textByLine;
+    char** textByLine = nullptr;
     UndoType type;
     bool wasHighlight;
 };
+
+inline bool operator ==(EditorPos lhs, EditorPos rhs)
+{
+    return lhs.textAt == rhs.textAt && lhs.line == rhs.line;
+}
+
+inline bool operator !=(EditorPos lhs, EditorPos rhs)
+{
+    return !(lhs == rhs);
+}
 
 struct Editor
 {
@@ -78,9 +87,6 @@ struct Editor
     //Where the cursor was when user started highlighting
     EditorPos highlightStart = {-1, -1};
 
-    //EditorPos undoStart = {-1, -1};
-    //bool undoTextAdded = false;
-    //bool undoWasHighlighted = false;
     bool lastActionWasUndo = false;
     UndoInfo undoStack[MAX_UNDOS];
     int numUndos = 0;
@@ -89,6 +95,8 @@ struct Editor
 
     IntPair textOffset = {};
 };
+
+
 
 void Init();
 void Draw(float dt);
