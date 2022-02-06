@@ -404,11 +404,77 @@ void MoveCursorDown()
     }
 }
 
+char** GetTextByLines(TextSectionInfo sectionInfo)
+{
+    const int numLines = sectionInfo.bottomLine - sectionInfo.topLine + 1;
+    char** result = HeapAlloc(char*, numLines); 
+    result[0] = HeapAlloc(char, sectionInfo.topLen + 1);
+	memcpy(result[0], 
+		   editor.lines[sectionInfo.topLine].text + sectionInfo.topTextStart,
+		   sectionInfo.topLen);
+	result[0][sectionInfo.topLen] = 0;
+    for (int i = 1; i < numLines - 1; ++i)
+    {
+        int l = i + sectionInfo.topLine;
+        result[i] = HeapAlloc(char, editor.lines[l].len + 1);
+        memcpy(result[i], editor.lines[l].text, editor.lines[l].len);
+		result[i][editor.lines[l].len] = 0;
+    }
+    if (!sectionInfo.spansOneLine)
+    {
+        result[numLines - 1] = HeapAlloc(char, sectionInfo.bottomTextEnd + 1);
+        memcpy(result[numLines - 1], 
+               editor.lines[sectionInfo.bottomLine].text, 
+               sectionInfo.bottomTextEnd);
+		result[numLines - 1][sectionInfo.bottomTextEnd] = 0;
+    }
+
+    return result;
+}
+
+UndoInfo InitUndoInfo(EditorPos undoStart, EditorPos undoEnd, UndoType type, bool wasHighlight)
+{
+    UndoInfo result;
+    result.undoStart = undoStart;
+    result.undoEnd = undoEnd;
+    result.textByLine = GetTextByLines(GetHighlightInfo(undoStart, undoEnd));
+    result.type = type;
+    result.wasHighlight = wasHighlight;
+    return result;
+}
+
+
+
 void AddChar()
 {
+    int numCharsAdded = (editor.currentChar == '\t') ? 4 : 1; 
+    EditorPos nextPos = {editor.cursorPos.textAt + numCharsAdded, editor.cursorPos.line};
+    UndoInfo* currentUndo = &editor.undoStack[editor.numUndos];
+
+
+    //if (editor.numUndos == 0)
+    //{
+    //    *currentUndo = InitUndoInfo(editor.cursorPos, 
+    //                                nextPos, 
+    //                                UNDOTYPE_ADDED_TEXT,
+    //                                false);
+    //}
+    if (editor.currentChar == ' ' || editor.currentChar == '\t' || 
+        currentUndo->type != UNDOTYPE_ADDED_TEXT || editor.cursorPos != currentUndo->undoEnd)
+    {
+        editor.undoStack[++editor.numUndos] = InitUndoInfo(editor.cursorPos, 
+                                                           nextPos, 
+                                                           UNDOTYPE_ADDED_TEXT,
+                                                           false);
+    }
+    else
+    {
+        currentUndo->undoEnd = nextPos;
+    }
+
+
     Line* line = &editor.lines[editor.cursorPos.line];
 
-    int numCharsAdded = (editor.currentChar == '\t') ? 4 : 1; 
     line->len += numCharsAdded;
     if (line->len >= line->size)
     {
@@ -457,6 +523,28 @@ void InsertTextInLine(int lineIndex, char* text, int textStart)
 
 void RemoveChar()
 {
+    UndoInfo* currentUndo = &editor.undoStack[editor.numUndos];
+
+    //if (editor.numUndos == 0)
+    //{
+    //    *currentUndo  = InitUndoInfo(editor.cursorPos, 
+    //                                 editor.cursorPos, 
+    //                                 UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER,
+    //                                 false);
+    //}
+    if (currentUndo->type != UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER || 
+             editor.cursorPos != currentUndo->undoEnd)
+    {
+        editor.undoStack[++editor.numUndos] = InitUndoInfo(editor.cursorPos, 
+                                                           editor.cursorPos, 
+                                                           UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER,
+                                                           false);
+    }
+    else
+    {
+        //Append to undo text buffer
+    }
+
     Line* line = &editor.lines[editor.cursorPos.line];
     if (editor.cursorPos.textAt > 0)
     {
@@ -487,8 +575,10 @@ void RemoveChar()
         editor.cursorPos.line--;
     }
 
-    //update undo info
+    //NOTE: This feels is too simple to be good
+    editor.undoStack[editor.numUndos].undoEnd = editor.cursorPos;
 
+    //update undo info
     if (editor.topChangedLineIndex != -1)
         editor.topChangedLineIndex = min(editor.topChangedLineIndex, editor.cursorPos.line);
     else 
@@ -532,8 +622,7 @@ void RemoveTextSection(TextSectionInfo sectionInfo)
            remainingBottomLen);
     editor.lines[sectionInfo.topLine].text[editor.lines[sectionInfo.topLine].len] = 0;
 
-    editor.cursorPos.line = sectionInfo.topLine;
-	editor.cursorPos.textAt = sectionInfo.topTextStart;
+    editor.cursorPos = {sectionInfo.topTextStart, sectionInfo.topLine};
     if (editor.topChangedLineIndex != -1)
         editor.topChangedLineIndex = min(editor.topChangedLineIndex, editor.cursorPos.line);
     else 
@@ -542,71 +631,27 @@ void RemoveTextSection(TextSectionInfo sectionInfo)
 	if (remainingBottomText) free(remainingBottomText);
 }
 
-char** GetTextByLines(TextSectionInfo sectionInfo)
-{
-    const int numLines = sectionInfo.bottomLine - sectionInfo.topLine + 1;
-    char** result = HeapAlloc(char*, numLines); 
-    result[0] = HeapAlloc(char, sectionInfo.topLen + 1);
-	memcpy(result[0], 
-		   editor.lines[sectionInfo.topLine].text + sectionInfo.topTextStart,
-		   sectionInfo.topLen);
-	result[0][sectionInfo.topLen] = 0;
-    for (int i = 1; i < numLines - 1; ++i)
-    {
-        int l = i + sectionInfo.topLine;
-        result[i] = HeapAlloc(char, editor.lines[l].len + 1);
-        memcpy(result[i], editor.lines[l].text, editor.lines[l].len);
-		result[i][editor.lines[l].len] = 0;
-    }
-    if (!sectionInfo.spansOneLine)
-    {
-        result[numLines - 1] = HeapAlloc(char, sectionInfo.bottomTextEnd + 1);
-        memcpy(result[numLines - 1], 
-               editor.lines[sectionInfo.bottomLine].text, 
-               sectionInfo.bottomTextEnd);
-		result[numLines - 1][sectionInfo.bottomTextEnd] = 0;
-    }
-
-    return result;
-}
-
-UndoInfo InitUndoInfo(EditorPos undoStart, EditorPos undoEnd, UndoType type, bool wasHighlight)
-{
-    UndoInfo result;
-    result.undoStart = undoStart;
-    result.undoEnd = undoEnd;
-    result.textByLine = GetTextByLines(GetHighlightInfo(undoStart, undoEnd));
-    result.type = type;
-    result.wasHighlight = wasHighlight;
-    return result;
-}
-
 void Backspace()
 {
+    bool deletingHighlightedText = editor.highlightStart.textAt != -1;
+    UndoType undoType = (deletingHighlightedText) ? 
+                        UNDOTYPE_REMOVED_TEXT_SECTION : UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER;
+    
 
     if (editor.highlightStart.textAt != -1)
     {
-        editor.undoStack[editor.numUndos++] = InitUndoInfo(
-                                                editor.highlightStart, 
-                                                editor.cursorPos, 
-                                                UNDOTYPE_REMOVED_TEXT_SECTION,
-                                                false);
-        editor.undoStack[editor.numUndos].textByLine = 
-            GetTextByLines(GetHighlightInfo(editor.undoStack[editor.numUndos - 1].undoStart, 
-                                            editor.cursorPos));
-        RemoveTextSection(GetHighlightInfo(editor.highlightStart, editor.cursorPos));
+        editor.undoStack[++editor.numUndos] = InitUndoInfo(editor.highlightStart, 
+                                                           editor.cursorPos, 
+                                                           UNDOTYPE_REMOVED_TEXT_SECTION,
+                                                           true);
+        TextSectionInfo highlightInfo = GetHighlightInfo(editor.highlightStart, editor.cursorPos);
+        editor.undoStack[editor.numUndos].textByLine = GetTextByLines(highlightInfo);
+        
+        RemoveTextSection(highlightInfo);
         ClearHighlights();
     }
     else
     {
-        if (editor.undoStack[editor.numUndos].type != UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER)
-        {
-            editor.undoStack[editor.numUndos++] = InitUndoInfo(
-                                                editor.undoStack[editor.numUndos - 1].undoStart, 
-                                                editor.cursorPos, 
-                                                UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER,
-                                                false);
-        }
         RemoveChar();
     }
 }
@@ -625,16 +670,22 @@ void InsertLineAt(int lineIndex)
 
 void Enter()
 {
-	UndoType undoType = UNDOTYPE_ADDED_TEXT;
-    if (editor.highlightStart.textAt != -1)
-    {
-		undoType = UNDOTYPE_OVERWRITE;
-        RemoveTextSection(GetHighlightInfo(editor.highlightStart, editor.cursorPos));
-    }
-
-	EditorPos prevCursorPos = editor.cursorPos;
     if (editor.numLines < MAX_LINES)
-    {
+    { 
+        editor.undoStack[++editor.numUndos] = InitUndoInfo(editor.cursorPos,
+                                                           editor.cursorPos,
+                                                           UNDOTYPE_ADDED_TEXT,
+                                                           editor.highlightStart.textAt != -1);
+        if (editor.highlightStart.textAt != -1)
+        {
+            TextSectionInfo highlightInfo = GetHighlightInfo(editor.highlightStart, 
+                                                             editor.cursorPos);
+	    	editor.undoStack[editor.numUndos].type = UNDOTYPE_OVERWRITE;
+            editor.undoStack[editor.numUndos].textByLine = GetTextByLines(highlightInfo);
+
+            RemoveTextSection(highlightInfo);
+        }
+
         int prevLineIndex = editor.cursorPos.line;
         editor.cursorPos.line++;
 
@@ -652,13 +703,11 @@ void Enter()
         editor.lines[editor.cursorPos.line].text[copiedLen] = 0;
 
         editor.cursorPos.textAt = 0;
+
+        editor.undoStack[editor.numUndos].undoEnd = editor.cursorPos;
     }
 
-	editor.undoStack[editor.numUndos++] = InitUndoInfo(
-		prevCursorPos,
-		editor.cursorPos,
-		undoType,
-		editor.highlightStart.textAt != -1);
+	
 }
 
 void HighlightEntireFile()
@@ -875,7 +924,10 @@ void Save()
 
 void Undo()
 {
-    UndoInfo undoInfo = editor.undoStack[--editor.numUndos];
+    if (editor.lastActionWasUndo && editor.numUndos == 0) return;
+
+    editor.numUndos -= (editor.lastActionWasUndo);
+    UndoInfo undoInfo = editor.undoStack[editor.numUndos];
     TextSectionInfo sectionInfo = GetHighlightInfo(undoInfo.undoStart, undoInfo.undoEnd);
 
     switch(undoInfo.type)
@@ -897,6 +949,7 @@ void Undo()
             break;
     }
     editor.cursorPos = undoInfo.undoStart;
+    editor.undoStack[editor.numUndos].undoEnd = undoInfo.undoStart; //This is hacky af but it works? 
     editor.lastActionWasUndo = true;
 }
 
@@ -930,15 +983,6 @@ void Draw(float dt)
         {
             if (InputDown(input.flags[code]))
             {
-
-                if (editor.numUndos == 0 || code == INPUTCODE_SPACE || code == INPUTCODE_TAB)
-                {
-                    editor.undoStack[editor.numUndos++] = InitUndoInfo(editor.cursorPos, 
-                                                                       editor.cursorPos, 
-                                                                       UNDOTYPE_ADDED_TEXT,
-                                                                       false);
-                }
-
                 char charOfKeyPressed = InputCodeToChar((InputCode)code, 
                                                         InputHeld(input.leftShift), 
                                                         capslockOn);
@@ -950,7 +994,6 @@ void Draw(float dt)
                 holdAction.elapsedTime = 0.0f;
 
                 editor.lastActionWasUndo = false;
-                editor.undoStack[editor.numUndos - 1].undoEnd = editor.cursorPos;
 
                 charKeyDown = true;
                 if (charKeyPressed)
@@ -1028,7 +1071,6 @@ void Draw(float dt)
                 if (i < 2 || !InputHeld(input.leftShift))
                 {
                     ClearHighlights();
-                    editor.undoStack[editor.numUndos - 1].undoEnd = editor.cursorPos;
                 }
             }
             else if (InputHeld(inputFlags[i]))
@@ -1077,8 +1119,6 @@ void Draw(float dt)
                 if (KeyCommandDown(keyCommands[i]))
                 {
                     keyCommandCallbacks[i]();
-                    if (i == 5 || i == 6)
-                        editor.undoStack[editor.numUndos - 1].undoEnd = editor.cursorPos;
                 }
             }
         }
