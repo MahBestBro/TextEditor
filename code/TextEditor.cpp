@@ -4,7 +4,6 @@
 #include "TextEditor_input.h"
 #include "TextEditor_string.h"
 
-#define INITIAL_LINE_SIZE 256
 #define CURSOR_HEIGHT 18
 #define PIXELS_UNDER_BASELINE 5
 
@@ -287,7 +286,7 @@ void ClearHighlights()
     editor.highlightStart.line = -1;
 }
 
-//TODO: Have cursor 
+//TODO: Have cursor skip over multiple spaces
 void AdvanceCursorToEndOfWord(bool forward)
 {
     Line line = editor.lines[editor.cursorPos.line];
@@ -494,7 +493,7 @@ void AddToUndoStack(EditorPos undoStart, EditorPos undoEnd, UndoType type, bool 
     undo.textByLine = GetTextByLines(GetTextSectionInfo(undoStart, undoEnd));
     undo.type = type;
     undo.wasHighlight = wasHighlight;
-    editor.undoStack[++editor.numUndos] = undo;
+    editor.undoStack[editor.numUndos++] = undo;
 }
 
 //
@@ -505,7 +504,7 @@ void AddToUndoStack(EditorPos undoStart, EditorPos undoEnd, UndoType type, bool 
 void AddChar()
 {
     int numCharsAdded = (editor.currentChar == '\t') ? 4 : 1; 
-    UndoInfo* currentUndo = &editor.undoStack[editor.numUndos];
+    UndoInfo* currentUndo = &editor.undoStack[editor.numUndos - 1];
 
     Line* line = &editor.lines[editor.cursorPos.line];
 
@@ -515,7 +514,7 @@ void AddChar()
         (editor.currentChar != ' ' && lastTypedChar == ' ' && secondLastTypedChar == ' ');
 
     if (startOfNewWord || editor.currentChar == '\t' || currentUndo->type != UNDOTYPE_ADDED_TEXT 
-        || editor.cursorPos != currentUndo->undoEnd || editor.highlightStart.textAt != -1)
+        || line->len == 0 || editor.highlightStart.textAt != -1)
     {
         AddToUndoStack(editor.cursorPos, editor.cursorPos, UNDOTYPE_ADDED_TEXT, false);
     }
@@ -524,23 +523,19 @@ void AddChar()
     {
         TextSectionInfo highlightInfo = 
             GetTextSectionInfo(editor.highlightStart, editor.cursorPos);
-        editor.undoStack[editor.numUndos].type = UNDOTYPE_OVERWRITE;
-        editor.undoStack[editor.numUndos].wasHighlight = true;
-        editor.undoStack[editor.numUndos].textByLine = GetTextByLines(highlightInfo);
-        editor.undoStack[editor.numUndos].numLines = 
+        editor.undoStack[editor.numUndos - 1].type = UNDOTYPE_OVERWRITE;
+        editor.undoStack[editor.numUndos - 1].wasHighlight = true;
+        editor.undoStack[editor.numUndos - 1].textByLine = GetTextByLines(highlightInfo);
+        editor.undoStack[editor.numUndos - 1].numLines = 
             highlightInfo.bottomLine - highlightInfo.topLine + 1;
         RemoveTextSection(highlightInfo);
     }
 
-    editor.undoStack[editor.numUndos].undoEnd = editor.cursorPos;
+    editor.undoStack[editor.numUndos - 1].undoEnd = editor.cursorPos;
 
 
     line->len += numCharsAdded;
-    if (line->len >= line->size)
-    {
-        line->size *= 2;
-        line->text = (char*)realloc(line->text, line->size);
-    }
+    ResizeDynamicArray(&line->text, line->len, sizeof(char), &line->size);
     //Shift right
     int offset = 4 * (editor.currentChar == '\t');
     for (int i = line->len - 1; i > editor.cursorPos.textAt + offset - 1; --i)
@@ -561,10 +556,10 @@ void AddChar()
     }
 
     //This is a hacky fix
-    if (editor.undoStack[editor.numUndos].undoStart.textAt > editor.cursorPos.textAt)
-        editor.undoStack[editor.numUndos].undoStart = editor.cursorPos;
+    if (editor.undoStack[editor.numUndos - 1].undoStart.textAt > editor.cursorPos.textAt)
+        editor.undoStack[editor.numUndos - 1].undoStart = editor.cursorPos;
     else
-        editor.undoStack[editor.numUndos].undoEnd = editor.cursorPos;
+        editor.undoStack[editor.numUndos - 1].undoEnd = editor.cursorPos;
 
 
     if (editor.topChangedLineIndex != -1)
@@ -573,7 +568,6 @@ void AddChar()
         editor.topChangedLineIndex = editor.cursorPos.line;
 }
 
-//TODO: Prevent Overflow
 void InsertTextInLine(int lineIndex, char* text, int textStart)
 {
     size_t textLen = StringLen(text);
@@ -585,28 +579,41 @@ void InsertTextInLine(int lineIndex, char* text, int textStart)
     }
     int prevLen = editor.lines[lineIndex].len;
     editor.lines[lineIndex].len += (int)textLen;
+    ResizeDynamicArray(&editor.lines[lineIndex].text, 
+                       editor.lines[lineIndex].len, 
+                       sizeof(char), &editor.lines[lineIndex].size);
     editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
 }
 
 void RemoveChar()
 {
-    UndoInfo* currentUndo = &editor.undoStack[editor.numUndos];
+    Line* line = &editor.lines[editor.cursorPos.line];
+    UndoInfo* currentUndo = &editor.undoStack[editor.numUndos - 1];
+	ResizableString* reverseBuffer;
 
     if (currentUndo->type != UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER || 
-             editor.cursorPos != currentUndo->undoEnd)
+        editor.cursorPos != currentUndo->undoEnd)
     {
         AddToUndoStack(editor.cursorPos, editor.cursorPos, UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER,
                        false);
+		reverseBuffer = &editor.undoStack[editor.numUndos - 1].reverseBuffer;
+		reverseBuffer->buffer = HeapAlloc(char, reverseBuffer->size);
     }
-    else
-    {
-        //Append to undo text buffer
+	else
+	{
+		//This feels redundant lol
+		reverseBuffer = &editor.undoStack[editor.numUndos - 1].reverseBuffer;
+	}
 
-    }
-
-    Line* line = &editor.lines[editor.cursorPos.line];
     if (editor.cursorPos.textAt > 0)
     {
+        //Append to undo text buffer
+        reverseBuffer->buffer[reverseBuffer->len++] = line->text[editor.cursorPos.textAt - 1];
+        ResizeDynamicArray(&(void*)reverseBuffer->buffer, 
+                           reverseBuffer->len, 
+                           sizeof(char), 
+                           &reverseBuffer->size);
+
 		line->len--;
 		for (int i = editor.cursorPos.textAt - 1; i < line->len; ++i)
 		{
@@ -614,9 +621,18 @@ void RemoveChar()
 		}
         line->text[line->len] = 0;
         editor.cursorPos.textAt--; 
+
+		editor.undoStack[editor.numUndos - 1].undoEnd = editor.cursorPos;
     }
     else if (editor.numLines > 1 && editor.cursorPos.line > 0)
     {
+        //Append to undo text buffer
+        reverseBuffer->buffer[reverseBuffer->len++] = '\n';
+        ResizeDynamicArray(&(void*)reverseBuffer->buffer, 
+                           reverseBuffer->len, 
+                           sizeof(char), 
+                           &reverseBuffer->size);
+
         editor.cursorPos.textAt = editor.lines[editor.cursorPos.line - 1].len;
         InsertTextInLine(
             editor.cursorPos.line - 1, 
@@ -634,10 +650,8 @@ void RemoveChar()
         editor.cursorPos.line--;
     }
 
-    //NOTE: This feels is too simple to be good
-    editor.undoStack[editor.numUndos].undoEnd = editor.cursorPos;
+    reverseBuffer->buffer[reverseBuffer->len] = 0;
 
-    //update undo info
     if (editor.topChangedLineIndex != -1)
         editor.topChangedLineIndex = min(editor.topChangedLineIndex, editor.cursorPos.line);
     else 
@@ -656,7 +670,7 @@ void Backspace()
         AddToUndoStack(editor.highlightStart, editor.cursorPos, UNDOTYPE_REMOVED_TEXT_SECTION,
                        true);
         TextSectionInfo highlightInfo = GetTextSectionInfo(editor.highlightStart, editor.cursorPos);
-        editor.undoStack[editor.numUndos].textByLine = GetTextByLines(highlightInfo);
+        editor.undoStack[editor.numUndos - 1].textByLine = GetTextByLines(highlightInfo);
         
         RemoveTextSection(highlightInfo);
         ClearHighlights();
@@ -689,9 +703,9 @@ void Enter()
         {
             TextSectionInfo highlightInfo = GetTextSectionInfo(editor.highlightStart, 
                                                              editor.cursorPos);
-	    	editor.undoStack[editor.numUndos].type = UNDOTYPE_OVERWRITE;
-            editor.undoStack[editor.numUndos].textByLine = GetTextByLines(highlightInfo);
-            editor.undoStack[editor.numUndos].numLines = 
+	    	editor.undoStack[editor.numUndos - 1].type = UNDOTYPE_OVERWRITE;
+            editor.undoStack[editor.numUndos - 1].textByLine = GetTextByLines(highlightInfo);
+            editor.undoStack[editor.numUndos - 1].numLines = 
                 highlightInfo.bottomLine - highlightInfo.topLine;
 
             RemoveTextSection(highlightInfo);
@@ -715,7 +729,7 @@ void Enter()
 
         editor.cursorPos.textAt = 0;
 
-        editor.undoStack[editor.numUndos].undoEnd = editor.cursorPos;
+        editor.undoStack[editor.numUndos - 1].undoEnd = editor.cursorPos;
     }
 
 	
@@ -941,8 +955,8 @@ void Undo()
 {
     if (editor.lastActionWasUndo && editor.numUndos == 0) return;
 
-    editor.numUndos -= (editor.lastActionWasUndo);
-    UndoInfo undoInfo = editor.undoStack[editor.numUndos];
+    //editor.numUndos -= (editor.lastActionWasUndo);
+    UndoInfo undoInfo = editor.undoStack[--editor.numUndos];
     TextSectionInfo sectionInfo = GetTextSectionInfo(undoInfo.undoStart, undoInfo.undoEnd);
 
     switch(undoInfo.type)
@@ -957,8 +971,17 @@ void Undo()
             break;
 
         case UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER:
-            UNIMPLEMENTED("This is for when user is backspacing non highlighted text");
-            break;
+        {
+            ResizableString reverseBuffer = undoInfo.reverseBuffer;
+            char** textToInsert = SplitStringByLines(ReverseString(reverseBuffer.buffer, 
+                                                                   reverseBuffer.len));
+			//hnnnngh I don't like this check, feels like InsertText should just handle this but ok ig
+			if (!IsEmptyString(textToInsert[0]))
+				InsertText(textToInsert, sectionInfo);
+			else
+				InsertLineAt(sectionInfo.topLine); 
+            editor.cursorPos = undoInfo.undoStart;
+        } break;
 
         case UNDOTYPE_OVERWRITE:
         {
@@ -969,11 +992,10 @@ void Undo()
 			insertEnd.textAt += StringLen(undoInfo.textByLine[undoInfo.numLines - 1]);
             insertEnd.line += undoInfo.numLines - 1;
             InsertText(undoInfo.textByLine, GetTextSectionInfo(insertStart, insertEnd));
-            //UNIMPLEMENTED("TODO: Handle undo for all instances of overwriting text");
         } break;
     }
     
-    editor.undoStack[editor.numUndos].undoEnd = undoInfo.undoStart; //This is hacky af but it works? 
+    editor.undoStack[editor.numUndos - 1].undoEnd = undoInfo.undoStart; //This is hacky af but it works? 
     editor.lastActionWasUndo = true;
 }
 
