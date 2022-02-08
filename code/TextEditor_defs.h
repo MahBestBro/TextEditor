@@ -26,6 +26,7 @@
 
 #define MAX_LINES 256
 #define MAX_UNDOS 256
+#define INITIAL_LINE_SIZE 256
 
 typedef uint8_t byte;
 typedef uint8_t uchar;
@@ -38,5 +39,7 @@ typedef int32_t int32;
 typedef int64_t int64;
 
 typedef wchar_t wchar;
+
+typedef void* ptr_to_arr;
 
 #endif
