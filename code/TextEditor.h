@@ -36,6 +36,13 @@ struct Line
     int len;
 };
 
+struct ResizableString
+{
+    char* buffer;
+    int size;
+    int len;
+};
+
 struct TextSectionInfo
 {
     int topTextStart = 0;
@@ -54,11 +61,14 @@ enum UndoType
     UNDOTYPE_REMOVED_TEXT_SECTION,
 };
 
+//TODO: figure out a way to make this neater? 
 struct UndoInfo
 {
     EditorPos undoStart;
     EditorPos undoEnd;
     char** textByLine = nullptr;
+    ResizableString reverseBuffer = {nullptr, INITIAL_LINE_SIZE, 0};
+    int numLines = -1;
     UndoType type;
     bool wasHighlight;
 };
@@ -96,6 +106,15 @@ struct Editor
     IntPair textOffset = {};
 };
 
+//Maybe make this into another function that adds the element before hand?
+inline void ResizeDynamicArray(ptr_to_arr arr, int len, size_t elSize, int* size)
+{
+    if (len >= *size)
+    {
+        *size *= 2;
+        *(ptr_to_arr*)arr = realloc(*(ptr_to_arr*)arr, *size * elSize);
+    }
+}
 
 
 void Init();
