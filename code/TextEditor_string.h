@@ -24,7 +24,13 @@ inline bool IsAlphaNumeric(char c)
     return IsAlphabetical(c) || IsNumeric(c);
 }
 
+inline bool IsEmptyString(char* str)
+{
+    return str[0] == 0;
+}
+
 void IntToString(int val, char* buffer);
-char** SplitStringByLines(char* str, int *len);
+char** SplitStringByLines(char* str, int *len = nullptr);
+char* ReverseString(char* str, int len);
 
 #endif
