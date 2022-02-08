@@ -23,7 +23,6 @@ void IntToString(int val, char* buffer)
     buffer[len] = 0;
 }
 
-//TODO: Make compatible with UNIX style line splitting
 char** SplitStringByLines(char* str, int* len)
 {
     int numStrings = 1;
@@ -43,17 +42,25 @@ char** SplitStringByLines(char* str, int* len)
     {
         int lineLen = 0;
         char* start = at;
-        for (; at[0] && at[0] != '\r'; at++)
+        for (; at[0] && at[0] != '\r' && at[0] != '\n'; at++)
             lineLen++;
 
         result[i] = (char*)malloc(lineLen + 1);
         memcpy(result[i], start, lineLen);
         result[i][lineLen] = 0;
 
-        at += 2;
+        at += (at[0] == '\r') ? 2 : 1;
     }
         
-    *len = numStrings;
+    if (len) *len = numStrings;
     return result;
 }
 
+char* ReverseString(char* str, int len)
+{
+    char* result = HeapAlloc(char, len);
+    for (int i = 0; i < len; ++i)
+        result[len - i - 1] = str[i];
+    result[len] = 0;
+    return result;
+}
