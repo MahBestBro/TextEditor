@@ -45,11 +45,9 @@ struct ResizableString
 
 struct TextSectionInfo
 {
-    int topTextStart = 0;
+    EditorPos top;
+    EditorPos bottom;
     int topLen = 0;
-    int topLine = 0;
-    int bottomTextEnd = 0;
-    int bottomLine = 0;
     bool spansOneLine = false;
 };
 
@@ -106,15 +104,19 @@ struct Editor
     IntPair textOffset = {};
 };
 
-//Maybe make this into another function that adds the element before hand?
-inline void ResizeDynamicArray(ptr_to_arr arr, int len, size_t elSize, int* size)
+#define AppendToDynamicArray(arr, len, val, size)   \
+(arr)[(len)++] = (val);                             \
+ResizeDynamicArray(&arr, len, sizeof(val), &size)   \
+
+inline void ResizeDynamicArray(void* ptrToArr, int len, size_t elSize, int* size)
 {
     if (len >= *size)
     {
         *size *= 2;
-        *(ptr_to_arr*)arr = realloc(*(ptr_to_arr*)arr, *size * elSize);
+        *(void**)ptrToArr = realloc(*(void**)ptrToArr, *size * elSize);
     }
 }
+
 
 
 void Init();
