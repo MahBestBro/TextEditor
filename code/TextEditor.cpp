@@ -202,7 +202,6 @@ void DrawAlphaRect(Rect rect, ColourRGBA colour, Rect limits = {0})
 
 }
 
-//TODO: Allow drawing backwards for text on left going offscreen
 void Draw8bppPixels(Rect rect, byte* pixels, int stride, Colour colour, Rect limits)
 {
     Assert(rect.left <= rect.right);
@@ -306,28 +305,28 @@ TextSectionInfo GetTextSectionInfo(EditorPos highlightStart, EditorPos highlight
     TextSectionInfo result;
     if (highlightStart.line > highlightEnd.line)
     {
-        result.topTextStart = highlightEnd.textAt;
-        result.topLine = highlightEnd.line;
-        result.bottomTextEnd = highlightStart.textAt;
-        result.bottomLine = highlightStart.line;
-        result.topLen = editor.lines[result.topLine].len - result.topTextStart;
+        result.top.textAt = highlightEnd.textAt;
+        result.top.line = highlightEnd.line;
+        result.bottom.textAt = highlightStart.textAt;
+        result.bottom.line = highlightStart.line;
+        result.topLen = editor.lines[result.top.line].len - result.top.textAt;
     }
     else if (highlightStart.line < highlightEnd.line)
     {
-        result.topTextStart = highlightStart.textAt;
-        result.topLine = highlightStart.line;
-        result.bottomTextEnd = highlightEnd.textAt;
-        result.bottomLine = highlightEnd.line;
-        result.topLen = editor.lines[result.topLine].len - result.topTextStart;
+        result.top.textAt = highlightStart.textAt;
+        result.top.line = highlightStart.line;
+        result.bottom.textAt = highlightEnd.textAt;
+        result.bottom.line = highlightEnd.line;
+        result.topLen = editor.lines[result.top.line].len - result.top.textAt;
     }
     else
     {
-        result.topTextStart = min(highlightStart.textAt, highlightEnd.textAt);
-        result.topLine = highlightEnd.line;
-        result.bottomTextEnd = max(highlightStart.textAt, highlightEnd.textAt);
-        result.bottomLine = result.topLine;
+        result.top.textAt = min(highlightStart.textAt, highlightEnd.textAt);
+        result.top.line = highlightEnd.line;
+        result.bottom.textAt = max(highlightStart.textAt, highlightEnd.textAt);
+        result.bottom.line = result.top.line;
         result.spansOneLine = true;
-        result.topLen = result.bottomTextEnd - result.topTextStart;
+        result.topLen = result.bottom.textAt - result.top.textAt;
     }
 
     return result;
@@ -413,27 +412,27 @@ void MoveCursorDown()
 
 char** GetTextByLines(TextSectionInfo sectionInfo)
 {
-    const int numLines = sectionInfo.bottomLine - sectionInfo.topLine + 1;
+    const int numLines = sectionInfo.bottom.line - sectionInfo.top.line + 1;
     char** result = HeapAlloc(char*, numLines); 
     result[0] = HeapAlloc(char, sectionInfo.topLen + 1);
 	memcpy(result[0], 
-		   editor.lines[sectionInfo.topLine].text + sectionInfo.topTextStart,
+		   editor.lines[sectionInfo.top.line].text + sectionInfo.top.textAt,
 		   sectionInfo.topLen);
 	result[0][sectionInfo.topLen] = 0;
     for (int i = 1; i < numLines - 1; ++i)
     {
-        int l = i + sectionInfo.topLine;
+        int l = i + sectionInfo.top.line;
         result[i] = HeapAlloc(char, editor.lines[l].len + 1);
         memcpy(result[i], editor.lines[l].text, editor.lines[l].len);
 		result[i][editor.lines[l].len] = 0;
     }
     if (!sectionInfo.spansOneLine)
     {
-        result[numLines - 1] = HeapAlloc(char, sectionInfo.bottomTextEnd + 1);
+        result[numLines - 1] = HeapAlloc(char, sectionInfo.bottom.textAt + 1);
         memcpy(result[numLines - 1], 
-               editor.lines[sectionInfo.bottomLine].text, 
-               sectionInfo.bottomTextEnd);
-		result[numLines - 1][sectionInfo.bottomTextEnd] = 0;
+               editor.lines[sectionInfo.bottom.line].text, 
+               sectionInfo.bottom.textAt);
+		result[numLines - 1][sectionInfo.bottom.textAt] = 0;
     }
 
     return result;
@@ -447,36 +446,36 @@ void RemoveTextSection(TextSectionInfo sectionInfo)
     if (!sectionInfo.spansOneLine)
     { 
         remainingBottomLen = 
-            editor.lines[sectionInfo.bottomLine].len - sectionInfo.bottomTextEnd;
+            editor.lines[sectionInfo.bottom.line].len - sectionInfo.bottom.textAt;
         remainingBottomText = HeapAlloc(char, remainingBottomLen + 1);
         memcpy(remainingBottomText, 
-               editor.lines[sectionInfo.bottomLine].text + sectionInfo.bottomTextEnd, 
+               editor.lines[sectionInfo.bottom.line].text + sectionInfo.bottom.textAt, 
                remainingBottomLen);
         remainingBottomText[remainingBottomLen] = 0;
     }    
 
     //Shift lines below highlited section up
-    editor.numLines -= sectionInfo.bottomLine - sectionInfo.topLine;
-    for (int i = sectionInfo.topLine + 1; i < editor.numLines; ++i)
+    editor.numLines -= sectionInfo.bottom.line - sectionInfo.top.line;
+    for (int i = sectionInfo.top.line + 1; i < editor.numLines; ++i)
     {
-        editor.lines[i] = editor.lines[i + sectionInfo.bottomLine - sectionInfo.topLine];
+        editor.lines[i] = editor.lines[i + sectionInfo.bottom.line - sectionInfo.top.line];
     }
 
     //Remove Text from top line and connect bottom line text
-    //TODO: realloc if not bottom line length > topLine.size
+    //TODO: realloc if not bottom line length > top.line.size
     const int topRemovedLen = sectionInfo.topLen;
     memcpy(
-        editor.lines[sectionInfo.topLine].text + sectionInfo.topTextStart, 
-        editor.lines[sectionInfo.topLine].text + sectionInfo.topTextStart + topRemovedLen,
-        editor.lines[sectionInfo.topLine].len - (sectionInfo.topTextStart + topRemovedLen)
+        editor.lines[sectionInfo.top.line].text + sectionInfo.top.textAt, 
+        editor.lines[sectionInfo.top.line].text + sectionInfo.top.textAt + topRemovedLen,
+        editor.lines[sectionInfo.top.line].len - (sectionInfo.top.textAt + topRemovedLen)
     );
-    editor.lines[sectionInfo.topLine].len += remainingBottomLen - topRemovedLen;
-    memcpy(editor.lines[sectionInfo.topLine].text + sectionInfo.topTextStart, 
+    editor.lines[sectionInfo.top.line].len += remainingBottomLen - topRemovedLen;
+    memcpy(editor.lines[sectionInfo.top.line].text + sectionInfo.top.textAt, 
            remainingBottomText, 
            remainingBottomLen);
-    editor.lines[sectionInfo.topLine].text[editor.lines[sectionInfo.topLine].len] = 0;
+    editor.lines[sectionInfo.top.line].text[editor.lines[sectionInfo.top.line].len] = 0;
 
-    editor.cursorPos = {sectionInfo.topTextStart, sectionInfo.topLine};
+    editor.cursorPos = {sectionInfo.top.textAt, sectionInfo.top.line};
     if (editor.topChangedLineIndex != -1)
         editor.topChangedLineIndex = min(editor.topChangedLineIndex, editor.cursorPos.line);
     else 
@@ -527,7 +526,7 @@ void AddChar()
         editor.undoStack[editor.numUndos - 1].wasHighlight = true;
         editor.undoStack[editor.numUndos - 1].textByLine = GetTextByLines(highlightInfo);
         editor.undoStack[editor.numUndos - 1].numLines = 
-            highlightInfo.bottomLine - highlightInfo.topLine + 1;
+            highlightInfo.bottom.line - highlightInfo.top.line + 1;
         RemoveTextSection(highlightInfo);
     }
 
@@ -568,21 +567,36 @@ void AddChar()
         editor.topChangedLineIndex = editor.cursorPos.line;
 }
 
-void InsertTextInLine(int lineIndex, char* text, int textStart)
+void AppendTextToLine(int lineIndex, char* text)
 {
     size_t textLen = StringLen(text);
-    for (int i = 0; i < textLen; ++i)
-    {
-        int lineAt = textStart + i;
-        editor.lines[lineIndex].text[lineAt + textLen] = editor.lines[lineIndex].text[lineAt];
-        editor.lines[lineIndex].text[lineAt] = text[i];
-    }
-    int prevLen = editor.lines[lineIndex].len;
+    memcpy(editor.lines[lineIndex].text + editor.lines[lineIndex].len, text, textLen);
+    
     editor.lines[lineIndex].len += (int)textLen;
     ResizeDynamicArray(&editor.lines[lineIndex].text, 
                        editor.lines[lineIndex].len, 
                        sizeof(char), &editor.lines[lineIndex].size);
     editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
+}
+
+void InsertTextInLine(int lineIndex, char* text, int textStart)
+{
+    size_t textLen = StringLen(text);
+    memmove(editor.lines[lineIndex].text + textStart + textLen, 
+           editor.lines[lineIndex].text + textStart, 
+           editor.lines[lineIndex].len - textStart);
+    memcpy(editor.lines[lineIndex].text + textStart, text, textLen);
+    
+    editor.lines[lineIndex].len += (int)textLen;
+    ResizeDynamicArray(&editor.lines[lineIndex].text, 
+                       editor.lines[lineIndex].len, 
+                       sizeof(char), &editor.lines[lineIndex].size);
+    editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
+}
+
+void InsertCharInLine(int lineIndex, char c, int textStart)
+{
+
 }
 
 void RemoveChar()
@@ -608,12 +622,11 @@ void RemoveChar()
     if (editor.cursorPos.textAt > 0)
     {
         //Append to undo text buffer
-        reverseBuffer->buffer[reverseBuffer->len++] = line->text[editor.cursorPos.textAt - 1];
-        ResizeDynamicArray(&(void*)reverseBuffer->buffer, 
-                           reverseBuffer->len, 
-                           sizeof(char), 
-                           &reverseBuffer->size);
-
+        AppendToDynamicArray(reverseBuffer->buffer, 
+                             reverseBuffer->len, 
+                             line->text[editor.cursorPos.textAt - 1],
+                             reverseBuffer->size);
+        
 		line->len--;
 		for (int i = editor.cursorPos.textAt - 1; i < line->len; ++i)
 		{
@@ -621,24 +634,14 @@ void RemoveChar()
 		}
         line->text[line->len] = 0;
         editor.cursorPos.textAt--; 
-
-		editor.undoStack[editor.numUndos - 1].undoEnd = editor.cursorPos;
     }
     else if (editor.numLines > 1 && editor.cursorPos.line > 0)
     {
         //Append to undo text buffer
-        reverseBuffer->buffer[reverseBuffer->len++] = '\n';
-        ResizeDynamicArray(&(void*)reverseBuffer->buffer, 
-                           reverseBuffer->len, 
-                           sizeof(char), 
-                           &reverseBuffer->size);
+        AppendToDynamicArray(reverseBuffer->buffer, reverseBuffer->len, '\n', reverseBuffer->size);
 
         editor.cursorPos.textAt = editor.lines[editor.cursorPos.line - 1].len;
-        InsertTextInLine(
-            editor.cursorPos.line - 1, 
-            editor.lines[editor.cursorPos.line].text, 
-            editor.lines[editor.cursorPos.line - 1].len
-        );
+        AppendTextToLine(editor.cursorPos.line - 1, editor.lines[editor.cursorPos.line].text);
 
 		//Shift lines up
 		for (int i = editor.cursorPos.line; i < editor.numLines; ++i)
@@ -649,6 +652,8 @@ void RemoveChar()
 
         editor.cursorPos.line--;
     }
+
+    editor.undoStack[editor.numUndos - 1].undoEnd = editor.cursorPos;
 
     reverseBuffer->buffer[reverseBuffer->len] = 0;
 
@@ -706,7 +711,7 @@ void Enter()
 	    	editor.undoStack[editor.numUndos - 1].type = UNDOTYPE_OVERWRITE;
             editor.undoStack[editor.numUndos - 1].textByLine = GetTextByLines(highlightInfo);
             editor.undoStack[editor.numUndos - 1].numLines = 
-                highlightInfo.bottomLine - highlightInfo.topLine;
+                highlightInfo.bottom.line - highlightInfo.top.line;
 
             RemoveTextSection(highlightInfo);
         }
@@ -755,15 +760,15 @@ void CopyHighlightedText()
     TextSectionInfo highlightInfo = GetTextSectionInfo(editor.highlightStart, editor.cursorPos);
 
     size_t copySize = highlightInfo.topLen + 2 * (!highlightInfo.spansOneLine);
-    for (int i = highlightInfo.topLine + 1; i < highlightInfo.bottomLine ; ++i)
+    for (int i = highlightInfo.top.line + 1; i < highlightInfo.bottom.line ; ++i)
     {
         copySize += editor.lines[i].len + 2;
     }
-    if (!highlightInfo.spansOneLine) copySize += highlightInfo.bottomTextEnd;
+    if (!highlightInfo.spansOneLine) copySize += highlightInfo.bottom.textAt;
 
     char* copiedText = HeapAlloc(char, copySize + 1);
     memcpy(copiedText, 
-           editor.lines[highlightInfo.topLine].text + highlightInfo.topTextStart, 
+           editor.lines[highlightInfo.top.line].text + highlightInfo.top.textAt, 
            highlightInfo.topLen);
 	int at = highlightInfo.topLen;
 	if (!highlightInfo.spansOneLine)
@@ -772,7 +777,7 @@ void CopyHighlightedText()
 		copiedText[highlightInfo.topLen + 1] = '\n';
 		at += 2;
 	}
-    for (int i = highlightInfo.topLine + 1; i < highlightInfo.bottomLine; ++i)
+    for (int i = highlightInfo.top.line + 1; i < highlightInfo.bottom.line; ++i)
     {
         memcpy(copiedText + at, editor.lines[i].text, editor.lines[i].len);
         copiedText[at + editor.lines[i].len]     = '\r'; 
@@ -781,8 +786,8 @@ void CopyHighlightedText()
     }
     if (!highlightInfo.spansOneLine) 
         memcpy(copiedText + at, 
-               editor.lines[highlightInfo.bottomLine].text, 
-               highlightInfo.bottomTextEnd);
+               editor.lines[highlightInfo.bottom.line].text, 
+               highlightInfo.bottom.textAt);
     copiedText[copySize] = 0;
 
     CopyToClipboard(copiedText, copySize);
@@ -790,18 +795,19 @@ void CopyHighlightedText()
     free(copiedText);
 }
 
+//TODO: Fix cursor moving for undo (or remove it and place it in Undo())
 void InsertText(char** textAsLines, TextSectionInfo sectionInfo)
 {
-    const int numLines = sectionInfo.bottomLine - sectionInfo.topLine + 1;
+    const int numLines = sectionInfo.bottom.line - sectionInfo.top.line + 1;
     //Set up the lines before adding text to prevent pushing down the same lines being added
     for (int i = 1; i < numLines; ++i)
-        InsertLineAt(sectionInfo.topLine + i);
+        InsertLineAt(sectionInfo.top.line + i);
 
     //Paste text
-    InsertTextInLine(sectionInfo.topLine, textAsLines[0], sectionInfo.topTextStart);
+    InsertTextInLine(sectionInfo.top.line, textAsLines[0], sectionInfo.top.textAt);
     for (int i = 1; i < numLines; ++i)
     {
-        InsertTextInLine(sectionInfo.topLine + i, textAsLines[i], 0);
+        InsertTextInLine(sectionInfo.top.line + i, textAsLines[i], 0);
     }
     
     editor.cursorPos.line += numLines - 1;
@@ -823,11 +829,11 @@ void Paste()
         free(textToPaste);
 
         TextSectionInfo sectionInfo;
-        sectionInfo.topTextStart = editor.cursorPos.textAt;
+        sectionInfo.top.textAt = editor.cursorPos.textAt;
         sectionInfo.topLen = StringLen(linesToPaste[0]);
-        sectionInfo.topLine = editor.cursorPos.line;
-        sectionInfo.bottomTextEnd = StringLen(linesToPaste[numLinesToPaste - 1]);
-        sectionInfo.bottomTextEnd = editor.cursorPos.line + numLinesToPaste - 1;
+        sectionInfo.top.line = editor.cursorPos.line;
+        sectionInfo.bottom.textAt = StringLen(linesToPaste[numLinesToPaste - 1]);
+        sectionInfo.bottom.textAt = editor.cursorPos.line + numLinesToPaste - 1;
         sectionInfo.spansOneLine = numLinesToPaste == 1;
         InsertText(linesToPaste, sectionInfo);
 
@@ -971,23 +977,52 @@ void Undo()
             break;
 
         case UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER:
-        {
-            ResizableString reverseBuffer = undoInfo.reverseBuffer;
-            char** textToInsert = SplitStringByLines(ReverseString(reverseBuffer.buffer, 
-                                                                   reverseBuffer.len));
-			//hnnnngh I don't like this check, feels like InsertText should just handle this but ok ig
-			if (!IsEmptyString(textToInsert[0]))
-				InsertText(textToInsert, sectionInfo);
-			else
-				InsertLineAt(sectionInfo.topLine); 
-            editor.cursorPos = undoInfo.undoStart;
+        {    
+            //NOTE: Do not be fooled! remainderLen is not always sectionInfo.topLen.
+            int remainderLen = editor.lines[sectionInfo.top.line].len - sectionInfo.top.textAt;
+            char* remainderText = HeapAlloc(char, sectionInfo.topLen + 1);
+            memcpy(remainderText, 
+                    editor.lines[sectionInfo.top.line].text + sectionInfo.top.textAt,
+                    sectionInfo.topLen + 1);
+            remainderText[remainderLen] = 0;
+
+            EditorPos at = sectionInfo.top;
+            editor.lines[at.line].len -= remainderLen; //1337 epik hax0r cheet to avoid inserting
+            for (int i = undoInfo.reverseBuffer.len - 1; i >= 0; --i)
+            {
+                if (undoInfo.reverseBuffer.buffer[i] == '\n')
+                {
+                    editor.lines[at.line].text[at.textAt] = 0;
+                    at.line++;
+                    InsertLineAt(at.line);
+                    at.textAt = 0;
+                }
+                else
+                {
+                    AppendToDynamicArray(editor.lines[at.line].text, 
+                                         editor.lines[at.line].len,
+                                         undoInfo.reverseBuffer.buffer[i], 
+                                         editor.lines[at.line].size);
+                    at.textAt++;
+                }
+            }
+
+            if (!IsEmptyString(remainderText))
+            {
+                InsertTextInLine(sectionInfo.bottom.line, 
+                                 remainderText, 
+                                 sectionInfo.bottom.textAt);
+            }
+            editor.cursorPos = sectionInfo.bottom;
+
+            free(remainderText);
         } break;
 
         case UNDOTYPE_OVERWRITE:
         {
             Assert(undoInfo.numLines != -1);
             RemoveTextSection(sectionInfo);
-			EditorPos insertStart = {sectionInfo.topTextStart, sectionInfo.topLine};
+			EditorPos insertStart = {sectionInfo.top.textAt, sectionInfo.top.line};
             EditorPos insertEnd = undoInfo.undoStart;
 			insertEnd.textAt += StringLen(undoInfo.textByLine[undoInfo.numLines - 1]);
             insertEnd.line += undoInfo.numLines - 1;
@@ -995,7 +1030,7 @@ void Undo()
         } break;
     }
     
-    editor.undoStack[editor.numUndos - 1].undoEnd = undoInfo.undoStart; //This is hacky af but it works? 
+    //editor.undoStack[editor.numUndos - 1].undoEnd = undoInfo.undoStart; //This is hacky af but it works? 
     editor.lastActionWasUndo = true;
 }
 
@@ -1235,15 +1270,15 @@ void Draw(float dt)
         
         //Draw top line highlight
         char* topHighlightText = 
-            editor.lines[highlightInfo.topLine].text + highlightInfo.topTextStart;
+            editor.lines[highlightInfo.top.line].text + highlightInfo.top.textAt;
         const int topHighlightPixelLength = 
             TextPixelLength(topHighlightText, highlightInfo.topLen);
 		int topXOffset = 
-            TextPixelLength(editor.lines[highlightInfo.topLine].text, highlightInfo.topTextStart);
+            TextPixelLength(editor.lines[highlightInfo.top.line].text, highlightInfo.top.textAt);
         int topX = start.x + topXOffset - editor.textOffset.x;
-        int topY = start.y - highlightInfo.topLine * CURSOR_HEIGHT - PIXELS_UNDER_BASELINE + 
+        int topY = start.y - highlightInfo.top.line * CURSOR_HEIGHT - PIXELS_UNDER_BASELINE + 
                    editor.textOffset.y;
-        if (editor.lines[highlightInfo.topLine].len == 0) topXOffset = fontChars[' '].advance;
+        if (editor.lines[highlightInfo.top.line].len == 0) topXOffset = fontChars[' '].advance;
         DrawAlphaRect(
             {topX, topX + topHighlightPixelLength, topY, topY + CURSOR_HEIGHT},
             {0, 255, 0, 255 / 3}, 
@@ -1251,7 +1286,7 @@ void Draw(float dt)
         );
 
         //Draw inbetween highlights
-        for (int i = highlightInfo.topLine + 1; i < highlightInfo.bottomLine; ++i)
+        for (int i = highlightInfo.top.line + 1; i < highlightInfo.bottom.line; ++i)
         {
             int highlightLen = editor.lines[i].len;
             char* lineText = editor.lines[i].text;
@@ -1270,12 +1305,12 @@ void Draw(float dt)
         if (!highlightInfo.spansOneLine)
         {
             int bottomHighlightPixelLength = 
-                TextPixelLength(editor.lines[highlightInfo.bottomLine].text, 
-                                highlightInfo.bottomTextEnd);
+                TextPixelLength(editor.lines[highlightInfo.bottom.line].text, 
+                                highlightInfo.bottom.textAt);
             int bottomX = start.x - editor.textOffset.x;
-            int bottomY = start.y - highlightInfo.bottomLine * CURSOR_HEIGHT 
+            int bottomY = start.y - highlightInfo.bottom.line * CURSOR_HEIGHT 
                           - PIXELS_UNDER_BASELINE + editor.textOffset.y;
-            if (editor.lines[highlightInfo.bottomLine].len == 0) 
+            if (editor.lines[highlightInfo.bottom.line].len == 0) 
                 bottomHighlightPixelLength = fontChars[' '].advance;
             DrawAlphaRect(
                 {bottomX, bottomX + bottomHighlightPixelLength, bottomY, bottomY + CURSOR_HEIGHT}, 
