@@ -62,13 +62,13 @@ enum UndoType
 //TODO: figure out a way to make this neater? 
 struct UndoInfo
 {
+    UndoType type;
     EditorPos undoStart;
     EditorPos undoEnd;
+    EditorPos prevCursorPos;
     char** textByLine = nullptr;
-    ResizableString reverseBuffer = {nullptr, INITIAL_LINE_SIZE, 0};
     int numLines = -1;
-    UndoType type;
-    bool wasHighlight;
+    ResizableString reverseBuffer = {nullptr, INITIAL_LINE_SIZE, 0};
 };
 
 inline bool operator ==(EditorPos lhs, EditorPos rhs)
@@ -80,6 +80,7 @@ inline bool operator !=(EditorPos lhs, EditorPos rhs)
 {
     return !(lhs == rhs);
 }
+
 
 struct Editor
 {
