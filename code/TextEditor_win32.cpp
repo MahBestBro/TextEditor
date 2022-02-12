@@ -316,15 +316,15 @@ internal void win32_ResizeDIB(int width, int height)
 
 }
 
-internal void win32_UpdateWindow(HDC deviceContext, RECT* windowRect, 
+internal void win32_UpdateWindow(HDC deviceContext, //RECT* windowRect, 
                                  int x, int y, int width, int height)
 {
-    int windowWidth = windowRect->right - windowRect->left;
-    int windowHeight = windowRect->bottom - windowRect->top;
+    //int windowWidth = windowRect->right - windowRect->left;
+    //int windowHeight = windowRect->bottom - windowRect->top;
     StretchDIBits(
         deviceContext, 
         0, 0, screenBuffer.width, screenBuffer.height,
-        0, 0, windowWidth, windowHeight,
+        x, y, width, height,
         screenBuffer.memory,
         &bitmapInfo,
         DIB_RGB_COLORS,
@@ -442,8 +442,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             DispatchMessageA(&msg);
         }
 
-        wchar inputLog[64];
-
         Draw(deltaTime);
         
         HDC hdc = GetDC(hwnd);
@@ -451,7 +449,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         GetClientRect(hwnd, &windowRect);
         int windowWidth = windowRect.right - windowRect.left;
         int windowHeight = windowRect.bottom - windowRect.top;
-        win32_UpdateWindow(hdc, &windowRect, 0, 0, windowWidth, windowHeight);
+        win32_UpdateWindow(hdc, /*&windowRect,*/ 0, 0, windowWidth, windowHeight);
         ReleaseDC(hwnd, hdc);
     }
     return 0;
@@ -493,7 +491,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             //FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW+1));
             RECT clientRect;
             GetClientRect(hwnd, &clientRect);
-            win32_UpdateWindow(hdc, &clientRect, x, y, width, height);
+            win32_UpdateWindow(hdc, /*&clientRect,*/ x, y, width, height);
 
 
             EndPaint(hwnd, &paint);
