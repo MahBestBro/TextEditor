@@ -63,8 +63,8 @@ enum UndoType
 struct UndoInfo
 {
     UndoType type;
-    EditorPos undoStart;
-    EditorPos undoEnd;
+    EditorPos start;
+    EditorPos end;
     EditorPos prevCursorPos;
     char** textByLine = nullptr;
     int numLines = -1;
@@ -81,7 +81,6 @@ inline bool operator !=(EditorPos lhs, EditorPos rhs)
     return !(lhs == rhs);
 }
 
-
 struct Editor
 {
     char* fileName = nullptr;
@@ -96,7 +95,6 @@ struct Editor
     //Where the cursor was when user started highlighting
     EditorPos highlightStart = {-1, -1};
 
-    bool lastActionWasUndo = false;
     UndoInfo undoStack[MAX_UNDOS];
     int numUndos = 0;
     UndoInfo redoStack[MAX_UNDOS];
@@ -109,9 +107,10 @@ struct Editor
 (arr)[(len)++] = (val);                             \
 ResizeDynamicArray(&arr, len, sizeof(val), &size)   \
 
+//NOTE: Always call this before you add to the array or else you will lose any elements whose index > size
 inline void ResizeDynamicArray(void* ptrToArr, int len, size_t elSize, int* size)
 {
-    if (len >= *size)
+    while (len >= *size)
     {
         *size *= 2;
         *(void**)ptrToArr = realloc(*(void**)ptrToArr, *size * elSize);
