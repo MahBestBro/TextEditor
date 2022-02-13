@@ -1,9 +1,6 @@
 There's no strict order but generally speaking the closer to the top the more important
 
 FEATURES: 
-    - Undo and Redo stack
-        - Actions are separated by invis characters, brackets and other non character input 
-          actions (e.g. moving and backspace)
     - Syntax highlighting
     - Wrap Text
     - Find and Replace
@@ -22,8 +19,6 @@ LIST OF COMMANDS TO IMPLEMENT:
     - Ctrl+N: Creates new text file
     - Ctrl+Q: Close tab
     - Ctrl+T: Opens terminal (unlikely but would be cool)
-    - Ctrl+Y: Redo
-    - Ctrl+Z: Undo
     - Ctrl++: Zoom in
     - Ctrl+-: Zoom out
     -
@@ -34,6 +29,8 @@ LIST OF COMMANDS TO IMPLEMENT:
     - Ctrl+Shift+Q: Closes Window
 
 PROGRAMMING/REFACTORING:
+    - Consider removing editor moving side effects from functions?
+    - Consider moving away from c-string (i.e., make string lib or find good string lib)
     - Have a function that can map a callback function to an input
         - Pass in inputcode and function poitner, then creates a timed event mapped to input 
           code.
