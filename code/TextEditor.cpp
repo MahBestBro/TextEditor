@@ -509,14 +509,16 @@ void RemoveTextSection(TextSectionInfo sectionInfo)
 	if (remainingBottomText) free(remainingBottomText);
 }
 
-void AddToUndoStack(EditorPos start, EditorPos end, UndoType type, bool redo = false)
+void AddToUndoStack(EditorPos undoStart, EditorPos undoEnd, UndoType type, bool redo = false)
 {
     UndoInfo undo;
-    undo.start = start;
-    undo.end = end;
+    undo.start = undoStart;
+    undo.end = undoEnd;
     undo.prevCursorPos = editor.cursorPos;
-    undo.textByLine = GetTextByLines(GetTextSectionInfo(start, end));
     undo.type = type;
+    if (type == UNDOTYPE_REMOVED_TEXT_SECTION || type == UNDOTYPE_OVERWRITE)
+        undo.textByLine = GetTextByLines(GetTextSectionInfo(undoStart, undoEnd));
+
     if (redo)
         editor.redoStack[editor.numRedos++] = undo;
     else
@@ -759,6 +761,26 @@ void Enter()
     }
 
 	
+}
+
+void HighlightCurrentLine()
+{
+    if (editor.highlightStart.textAt == -1)
+    { 
+        Assert(editor.highlightStart.line == -1);
+        editor.highlightStart.textAt = 0;
+        editor.highlightStart.line = editor.cursorPos.line;
+    }
+
+    if (editor.cursorPos.line < MAX_LINES - 1)
+    {
+        editor.cursorPos.textAt = 0;
+        editor.cursorPos.line++;
+    }
+    else 
+    {
+        editor.cursorPos.textAt = editor.lines[editor.cursorPos.line].len;
+    }
 }
 
 void HighlightEntireFile()
@@ -1021,7 +1043,7 @@ void Save()
     }
 }
 
-
+//TODO: Cleanup memory leaks
 void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
 {
     UndoInfo* stack = (!isRedo) ? editor.redoStack : editor.undoStack;
@@ -1186,9 +1208,8 @@ void Draw(float dt)
                 char charOfKeyPressed = InputCodeToChar((InputCode)code, 
                                                         InputHeld(input.leftShift), 
                                                         capslockOn);
-				Assert(charOfKeyPressed != 0);
                 editor.currentChar = charOfKeyPressed;
-                AddChar();
+                if (charOfKeyPressed) AddChar();
 
                 holdAction.elapsedTime = 0.0f;
 
@@ -1299,6 +1320,7 @@ void Draw(float dt)
             {
                 {CTRL, INPUTCODE_A},
                 {CTRL, INPUTCODE_C},
+                {CTRL, INPUTCODE_L},
                 {CTRL, INPUTCODE_O},
                 {CTRL, INPUTCODE_S},
                 {CTRL | SHIFT, INPUTCODE_S},
@@ -1312,6 +1334,7 @@ void Draw(float dt)
             {
                 HighlightEntireFile,
                 CopyHighlightedText,
+                HighlightCurrentLine,
                 OpenFile,
                 Save,
                 SaveAs,
