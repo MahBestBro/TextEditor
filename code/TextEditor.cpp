@@ -552,7 +552,7 @@ void ResetRedoStack()
 
 void AddChar()
 {
-    int numCharsAdded = (editor.currentChar == '\t') ? 4 : 1; 
+    int numCharsAdded = (editor.currentChar == '\t') ? 4 - editor.cursorPos.textAt % 4 : 1; 
     UndoInfo* currentUndo = &editor.undoStack[editor.numUndos - 1];
 
     Line* line = &editor.lines[editor.cursorPos.line];
@@ -600,7 +600,7 @@ void AddChar()
     editor.cursorPos.textAt++;
     if (editor.currentChar == '\t')
     {
-        for (int _ = 0; _ < 3; ++_)
+        for (int _ = 0; _ < numCharsAdded - 1; ++_)
         {
             line->text[editor.cursorPos.textAt] = c;
             editor.cursorPos.textAt++;
@@ -707,6 +707,46 @@ void Backspace()
     {
         RemoveChar();
     }
+}
+
+//TODO: Undoing
+void MoveBackATab()
+{
+    TextSectionInfo highlight;
+    highlight.bottom.line = -1;
+    int lineAt = editor.cursorPos.line;
+    if (editor.highlightStart.line != -1)
+    {
+        highlight = GetTextSectionInfo(editor.highlightStart, editor.cursorPos);
+        lineAt = highlight.top.line;
+    }
+
+    do
+    {
+        int numSpacesAtFront = 0;
+        while (editor.lines[lineAt].text[numSpacesAtFront] == ' ')
+            numSpacesAtFront++;
+        int numRemoved = (numSpacesAtFront - 1) % 4 + 1;
+
+        if (numSpacesAtFront > 0)
+        {
+            int destIndex = numSpacesAtFront - numRemoved;
+            memcpy(editor.lines[lineAt].text + destIndex, 
+                   editor.lines[lineAt].text + numSpacesAtFront, 
+                   editor.lines[lineAt].len - numRemoved);
+            editor.lines[lineAt].len -= numRemoved;
+            editor.lines[lineAt].text[editor.lines[lineAt].len] = 0;
+
+            if (editor.cursorPos.line == lineAt)
+                editor.cursorPos.textAt -= numRemoved;
+            if (editor.highlightStart.line == lineAt)
+                editor.highlightStart.textAt -= numRemoved;
+        }
+
+        lineAt++;
+    } while (lineAt < highlight.bottom.line + 1);
+
+    
 }
 
 //Inserts line without messing around with the cursor indicies
@@ -1208,6 +1248,10 @@ void Draw(float dt)
                 char charOfKeyPressed = InputCodeToChar((InputCode)code, 
                                                         InputHeld(input.leftShift), 
                                                         capslockOn);
+                
+                //Hacky Fix. Refactor if possible
+                if (charOfKeyPressed == '\t' && InputHeld(input.leftShift)) break;
+
                 editor.currentChar = charOfKeyPressed;
                 if (charOfKeyPressed) AddChar();
 
@@ -1304,6 +1348,24 @@ void Draw(float dt)
                 inputHeld = true;
             }
         } 
+
+        //Handle Shift Tab
+        //TODO: Less repetition
+        if (InputHeld(input.leftShift))
+        {
+            if (InputDown(input.tab))
+            {
+                repeatAction.OnTrigger = MoveBackATab;
+                MoveBackATab();
+                holdAction.elapsedTime = 0.0f;
+            }
+            else
+            {
+                inputHeld = true;
+            }   
+        }
+
+        
 
         if (inputHeld)
             HandleTimedEvent(&holdAction, dt, &repeatAction);
