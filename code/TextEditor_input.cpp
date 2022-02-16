@@ -86,7 +86,7 @@ char InputCodeToChar(InputCode code, bool shift, bool caps)
     else if (code == INPUTCODE_ENTER)
         return '\n'; //This might be redundant?
     else if (code == INPUTCODE_TAB)
-        return (shift) ? 0 : '\t';
+        return '\t';
     else if (code >= INPUTCODE_A && code <= INPUTCODE_Z)
         return ((caps) ? 'A' : 'a') + (char)(code - INPUTCODE_A);  
 
