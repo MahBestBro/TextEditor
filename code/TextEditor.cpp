@@ -622,9 +622,11 @@ void InsertTextInLine(int lineIndex, char* text, int textStart)
                        sizeof(char), 
                        &editor.lines[lineIndex].size);
     
+    int spaceLeft = editor.lines[lineIndex].size - editor.lines[lineIndex].len;
+	int numToMove = min(editor.lines[lineIndex].len - textStart, spaceLeft);
     memmove(editor.lines[lineIndex].text + textStart + textLen, 
-           editor.lines[lineIndex].text + textStart, 
-           editor.lines[lineIndex].len - textStart);
+            editor.lines[lineIndex].text + textStart, 
+			numToMove);
     memcpy(editor.lines[lineIndex].text + textStart, text, textLen);
     
     editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
