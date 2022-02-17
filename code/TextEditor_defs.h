@@ -18,6 +18,7 @@
 #define Clamp(x, lo, hi) (max(min((x), (hi)), (lo)))
 #define InRange(x, lo, hi) ((x) >= (lo) && (x) <= (hi))
 
+//#define HeapAlloc(type, numEls) (type*)dbg_malloc((numEls) * sizeof(type), __FILE__, __LINE__)
 #define HeapAlloc(type, numEls) (type*)malloc((numEls) * sizeof(type))
 #define HeapRealloc(type, arr, numEls) (type*)realloc(arr, (numEls) * sizeof(type))
 
@@ -39,7 +40,5 @@ typedef int32_t int32;
 typedef int64_t int64;
 
 typedef wchar_t wchar;
-
-typedef void* ptr_to_arr;
 
 #endif
