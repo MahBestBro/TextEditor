@@ -1,3 +1,5 @@
+#include "stdio.h"
+
 #include "TextEditor_defs.h"
 #include "TextEditor_input.h"
 
@@ -118,10 +120,17 @@ inline void ResizeDynamicArray(void* ptrToArr, int len, size_t elSize, int* size
 }
 
 
-
 void Init();
 void Draw(float dt);
 void Print(const char* message);
+
+inline void* dbg_malloc(size_t size, const char* file, int line)
+{
+    char msg[128];
+    snprintf(msg, sizeof(msg), "Allocated %zi bytes at %s, Line: %i.\n", size, file, line);
+    Print(msg);
+    return malloc(size);
+}
 
 char* ReadEntireFile(char* fileName, uint32* fileLen  = nullptr);
 bool WriteToFile(char* fileName, char* text, uint64 textLen, bool overwrite, int32 writeStart = 0);
