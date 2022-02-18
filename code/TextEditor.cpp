@@ -632,6 +632,16 @@ void InsertTextInLine(int lineIndex, char* text, int textStart)
     editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
 }
 
+void RemoveTextInLine(int lineIndex, int textStart, int textEnd)
+{
+    Assert(textStart <= textEnd);
+	editor.lines[lineIndex].len -= textEnd - textStart;
+    memcpy(editor.lines[lineIndex].text + textStart, 
+           editor.lines[lineIndex].text + textEnd, 
+		   editor.lines[lineIndex].len);
+    editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
+}
+
 void RemoveChar()
 {
     Line* line = &editor.lines[editor.cursorPos.line];
@@ -698,6 +708,7 @@ void Backspace()
     if (editor.highlightStart.textAt != -1)
     {
         AddToUndoStack(editor.highlightStart, editor.cursorPos, UNDOTYPE_REMOVED_TEXT_SECTION);
+        editor.undoStack[editor.numUndos - 1].wasHighlight = true;
         TextSectionInfo highlightInfo = GetTextSectionInfo(editor.highlightStart, editor.cursorPos);
         editor.undoStack[editor.numUndos - 1].textByLine = GetTextByLines(highlightInfo);
         ResetRedoStack();
@@ -712,7 +723,7 @@ void Backspace()
 }
 
 //TODO: Undoing
-void MoveBackATab()
+void UnTab()
 {
     TextSectionInfo highlight;
     highlight.bottom.line = -1;
@@ -722,6 +733,12 @@ void MoveBackATab()
         highlight = GetTextSectionInfo(editor.highlightStart, editor.cursorPos);
         lineAt = highlight.top.line;
     }
+
+    AddToUndoStack({-1, editor.cursorPos.line}, {-1, editor.cursorPos.line}, UNDOTYPE_REMOVED_TEXT_SECTION);
+    int numLines = 
+        (editor.highlightStart.line != -1) * (highlight.bottom.line - highlight.top.line) + 1;
+    editor.undoStack[editor.numUndos - 1].textByLine = HeapAlloc(char*, numLines);
+    editor.undoStack[editor.numUndos - 1].numLines = numLines;
 
     do
     {
@@ -739,15 +756,38 @@ void MoveBackATab()
             editor.lines[lineAt].len -= numRemoved;
             editor.lines[lineAt].text[editor.lines[lineAt].len] = 0;
 
-            if (editor.cursorPos.line == lineAt)
-                editor.cursorPos.textAt -= numRemoved;
+            editor.undoStack[editor.numUndos - 1].start.textAt = 
+                min(destIndex, editor.undoStack[editor.numUndos - 1].start.textAt);
+            //If first line, set undo positions accordingly
+            if (lineAt == editor.cursorPos.line) 
+            {
+                editor.undoStack[editor.numUndos - 1].start.textAt = destIndex;
+                editor.undoStack[editor.numUndos - 1].end.textAt = numSpacesAtFront;
+            }
+            editor.undoStack[editor.numUndos - 1].start.textAt = 
+                min(destIndex, editor.undoStack[editor.numUndos - 1].start.textAt);
+
+            if (editor.cursorPos.line == lineAt && editor.cursorPos.textAt > destIndex)
+                editor.cursorPos.textAt -= min(numRemoved, editor.cursorPos.textAt - destIndex);
             if (editor.highlightStart.line == lineAt)
-                editor.highlightStart.textAt -= numRemoved;
+                editor.highlightStart.textAt -= min(numRemoved, editor.highlightStart.textAt - destIndex);
         }
 
-        lineAt++;
-    } while (lineAt < highlight.bottom.line + 1);
+        int textByLineIndex = lineAt - editor.cursorPos.line;
+        editor.undoStack[editor.numUndos - 1].textByLine[textByLineIndex] = HeapAlloc(char, numRemoved + 1);
+        for (int i = 0; i < numRemoved; ++i)
+            editor.undoStack[editor.numUndos - 1].textByLine[textByLineIndex][i] = ' ';
+        editor.undoStack[editor.numUndos - 1].textByLine[textByLineIndex][numRemoved] = 0;
 
+        lineAt++;
+    } while (lineAt <= highlight.bottom.line);
+
+    //If more than one line, set proper undo info
+    if (editor.highlightStart.line != -1)
+    {
+        editor.undoStack[editor.numUndos - 1].type = UNDOTYPE_MULTILINE_REMOVE;
+        editor.undoStack[editor.numUndos - 1].end.line = highlight.bottom.line;
+    }
     
 }
 
@@ -1095,12 +1135,14 @@ void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
     ClearHighlights();
 
     AddToUndoStack(undoInfo.start, undoInfo.end, UNDOTYPE_ADDED_TEXT, !isRedo);
+    stack[*numInStack - 1].wasHighlight = undoInfo.wasHighlight; //hnnngghhhh
 
     switch(undoInfo.type)
     {
         case UNDOTYPE_ADDED_TEXT:
         {
             stack[*numInStack - 1].type = UNDOTYPE_REMOVED_TEXT_SECTION;
+            stack[*numInStack - 1].textByLine = GetTextByLines(sectionInfo);
             RemoveTextSection(sectionInfo);
         } break;
 
@@ -1110,7 +1152,7 @@ void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
 
             InsertText(undoInfo.textByLine, sectionInfo);
             
-            if (!isRedo)
+            if (!isRedo && undoInfo.wasHighlight)
             {
                 editor.highlightStart = (undoInfo.prevCursorPos == sectionInfo.bottom) ? 
                                         sectionInfo.top : sectionInfo.bottom;
@@ -1189,6 +1231,35 @@ void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
                                         insertStart : insertEnd;
             }
             
+        } break;
+
+        //TODO: This assumes that multine cursors are all at the same text index on each line, make this handle different test indicies
+        case UNDOTYPE_MULTILINE_ADD:
+        {
+            stack[*numInStack - 1].type = UNDOTYPE_MULTILINE_REMOVE;
+            stack[*numInStack - 1].numLines = undoInfo.numLines;
+			stack[*numInStack - 1].textByLine = undoInfo.textByLine;
+
+            for (int i = 0; i < undoInfo.numLines; ++i)
+            {
+                int line = i + sectionInfo.top.line;
+                int end = sectionInfo.top.textAt + StringLen(undoInfo.textByLine[i]);
+                RemoveTextInLine(line, sectionInfo.top.textAt, end);
+            }
+        } break;
+
+        //TODO: This assumes that multine cursors are all at the same text index on each line, make this handle different test indicies
+        case UNDOTYPE_MULTILINE_REMOVE:
+        {
+            stack[*numInStack - 1].type = UNDOTYPE_MULTILINE_ADD;
+			stack[*numInStack - 1].numLines = undoInfo.numLines;
+			stack[*numInStack - 1].textByLine = undoInfo.textByLine;
+
+            for (int i = 0; i < undoInfo.numLines; ++i)
+            {
+                int line = i + sectionInfo.top.line;
+                InsertTextInLine(line, undoInfo.textByLine[i], sectionInfo.top.textAt);
+            }
         } break;
     }
      
@@ -1357,13 +1428,13 @@ void Draw(float dt)
         {
             if (InputDown(input.tab))
             {
-                repeatAction.OnTrigger = MoveBackATab;
-                MoveBackATab();
+                repeatAction.OnTrigger = UnTab;
+                UnTab();
                 holdAction.elapsedTime = 0.0f;
             }
             else
             {
-                inputHeld = true;
+                inputHeld = InputHeld(input.tab);
             }   
         }
 
