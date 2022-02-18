@@ -59,6 +59,8 @@ enum UndoType
     UNDOTYPE_OVERWRITE,
     UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER,
     UNDOTYPE_REMOVED_TEXT_SECTION,
+    UNDOTYPE_MULTILINE_ADD,
+    UNDOTYPE_MULTILINE_REMOVE
 };
 
 //TODO: figure out a way to make this neater? 
@@ -68,8 +70,13 @@ struct UndoInfo
     EditorPos start;
     EditorPos end;
     EditorPos prevCursorPos;
+
+    bool wasHighlight = false; //Only used for UNDOTYPE_REMOVED_TEXT_SECTION
+    
     char** textByLine = nullptr;
     int numLines = -1;
+    
+    //Only used for backspacing char by char
     ResizableString reverseBuffer = {nullptr, INITIAL_LINE_SIZE, 0};
 };
 
