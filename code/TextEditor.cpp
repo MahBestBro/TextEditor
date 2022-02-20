@@ -342,7 +342,7 @@ void MoveCursorForward()
         else
             editor.cursorPos.textAt++;
 
-        if (InputHeld(input.leftShift) && editor.highlightStart.line == -1)
+        if (InputHeld(input.leftShift))
             InitHighlight(prevTextIndex, editor.cursorPos.line);
             
     }
@@ -354,7 +354,7 @@ void MoveCursorForward()
         if (InputHeld(input.leftCtrl))
             AdvanceCursorToEndOfWord(true);
 
-        if (InputHeld(input.leftShift) && editor.highlightStart.line == -1)
+        if (InputHeld(input.leftShift))
             InitHighlight(editor.lines[editor.cursorPos.line - 1].len, editor.cursorPos.line - 1);
     }
 }
