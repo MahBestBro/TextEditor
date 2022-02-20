@@ -342,8 +342,9 @@ void MoveCursorForward()
         else
             editor.cursorPos.textAt++;
 
-        if (InputHeld(input.leftShift))
+        if (InputHeld(input.leftShift) && editor.highlightStart.line == -1)
             InitHighlight(prevTextIndex, editor.cursorPos.line);
+            
     }
     else if (editor.cursorPos.line < editor.numLines - 1)
     {
@@ -353,7 +354,7 @@ void MoveCursorForward()
         if (InputHeld(input.leftCtrl))
             AdvanceCursorToEndOfWord(true);
 
-        if (InputHeld(input.leftShift))
+        if (InputHeld(input.leftShift) && editor.highlightStart.line == -1)
             InitHighlight(editor.lines[editor.cursorPos.line - 1].len, editor.cursorPos.line - 1);
     }
 }
@@ -1432,13 +1433,11 @@ void Draw(float dt)
                 UnTab();
                 holdAction.elapsedTime = 0.0f;
             }
-            else
+            else if (InputHeld(input.tab))
             {
-                inputHeld = InputHeld(input.tab);
+                inputHeld = true;
             }   
         }
-
-        
 
         if (inputHeld)
             HandleTimedEvent(&holdAction, dt, &repeatAction);
@@ -1447,6 +1446,7 @@ void Draw(float dt)
 
         if (InputDown(input.capsLock))
             capslockOn = !capslockOn;
+            
 
         if (!inputHeld)
         {
