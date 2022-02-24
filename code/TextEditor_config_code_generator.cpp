@@ -4,6 +4,13 @@
 
 #define __Out
 
+struct Code
+{
+    int size;
+    int len;
+    char* buffer;
+};
+
 bool CompareStrings(char* str1, int len1, char* str2, int len2)
 {
     if (len1 != len2) return false;
@@ -103,40 +110,41 @@ const char* structStartingCode =
 R"foo(struct UserSettings
 {
 )foo";
-const int structStart = 22; 
-const char* structEndingCode = R"foo(};)foo";
-const int structEndLen = 2;
+const int structStart = 22;
 
-//const char* memberMetaDataStartingCode = 
-//R"foo(UserSettingsMemberMetaData memberMetaData[] =
-//{
-//)foo";
-//const int memberMetaDataStart = 50;
+const char* memberMetaDataStartingCode = 
+R"foo(UserSettingsMemberMetaData memberMetaData[] =
+{
+)foo";
+const int memberMetaDataStart = 48;
+
+void AppendStringToCode(Code* code, char* append, int appendLen)
+{
+    if (code->len + appendLen > code->size)
+    {
+        code->size *= 2;
+        code->buffer = (char*)realloc(code->buffer, code->size);
+    }
+    memcpy(code->buffer + code->len, append, appendLen);
+    code->len += appendLen;
+}
 
 void GenerateConfigCode(char* configFile)
 {
-    int structCodeSize = 1024;
-    int structCodeLen = structStart;
-    char* structCode = (char*)malloc(structCodeSize);
-    memcpy(structCode, structStartingCode, structStart);
+    Code structCode = {1024, structStart, nullptr};
+    structCode.buffer = (char*)malloc(structCode.size);
+    memcpy(structCode.buffer, structStartingCode, structStart);
 
     //TODO: If we start introspecting more structs for metadata, move into another preprocessor
-    //int memberMetaDataCodeSize = 1024;
-    //int memberMetaDataCodeLen = structStart;
-    //char* memberMetaDataCode = (char*)malloc(structCodeSize);
-    //memcpy(structCode, memberMetaDataStartingCode, memberMetaDataStart);
+    Code memberMetaDataCode = {1024, memberMetaDataStart, nullptr};
+    memberMetaDataCode.buffer = (char*)malloc(memberMetaDataCode.size);
+    memcpy(memberMetaDataCode.buffer, memberMetaDataStartingCode, memberMetaDataStart);
 
     int lineNum = 1;
     char* line = configFile; 
     while (line)
     {
         int lineLen = GetDistToCharOrEOS(line, '\r');
-
-        if (structCodeLen + lineLen > structCodeSize)
-        {
-            structCodeSize *= 2;
-            structCode = (char*)realloc(structCode, structCodeSize);
-        }
 
         int varNameLen = GetDistToCharOrEOS(line, ' ');
         char* varName = line;
@@ -159,43 +167,49 @@ void GenerateConfigCode(char* configFile)
             return;
         }
 
-        memcpy(structCode + structCodeLen, "    ", 4);
-        structCodeLen += 4;
+        //TODO: Parse string variable
+
+        AppendStringToCode(&structCode, "    ", 4);
+        AppendStringToCode(&memberMetaDataCode, "    ", 4);
         if (commaCount == 0)
         {
-            memcpy(structCode + structCodeLen, "int ", 4);
-            structCodeLen += 4;
+            AppendStringToCode(&structCode, "int ", 4);
+            AppendStringToCode(&structCode, "{TYPE_INT, ", 11);
         }
         else if (commaCount == 2)
         {
-            memcpy(structCode + structCodeLen, "Colour ", 7);
-            structCodeLen += 7;
+            AppendStringToCode(&structCode, "Colour ", 7);
+            AppendStringToCode(&memberMetaDataCode, "{TYPE_COLOUR_RGB, ", 18);
         }
         else if (commaCount == 3)
         {
-            memcpy(structCode + structCodeLen, "ColourRGBA ", 11);
-            structCodeLen += 11;
+            AppendStringToCode(&structCode, "ColourRGBA ", 11);
+            AppendStringToCode(&memberMetaDataCode, "{TYPE_COLOUR_RGBA, ", 19);
         }
 
-        memcpy(structCode + structCodeLen, varName, varNameLen);
-        structCodeLen += varNameLen;
-        memcpy(structCode + structCodeLen, ";\r\n", 3);
-        structCodeLen += 3;
+        AppendStringToCode(&structCode, varName, varNameLen);
+        AppendStringToCode(&structCode, ";\r\n", 3);
+
+        AppendStringToCode(&memberMetaDataCode, "StructOffset(UserSettings, ", 27);
+        AppendStringToCode(&memberMetaDataCode, varName, varNameLen);
+        if (AdvanceToNextLine(line) != nullptr)
+            AppendStringToCode(&memberMetaDataCode, ")},\r\n", 5);
+        else
+            AppendStringToCode(&memberMetaDataCode, ")}\r\n", 4);
 
         lineNum++;
         line = AdvanceToNextLine(line);
     }
 
-    if (structCodeLen + structEndLen > structCodeSize)
-    {
-        structCodeSize *= 2;
-        structCode = (char*)realloc(structCode, structCodeSize);
-    }
-    memcpy(structCode + structCodeLen, structEndingCode, structEndLen);
-    structCodeLen += structEndLen;
-    structCode[structCodeLen] = 0;
+    AppendStringToCode(&structCode, "};", 2);
+    structCode.buffer[structCode.len] = 0;
+    AppendStringToCode(&memberMetaDataCode, "};", 2);
+    memberMetaDataCode.buffer[memberMetaDataCode.len] = 0;
 
-    WriteToFile("../code/TextEditor_user_settings.inc", structCode, structCodeLen);
+    WriteToFile("../code/TextEditor_user_settings_struct.inc", 
+                structCode.buffer, structCode.len);
+    WriteToFile("../code/TextEditor_user_settings_memberData.inc", 
+                memberMetaDataCode.buffer, memberMetaDataCode.len);
 }
 
 int main()
