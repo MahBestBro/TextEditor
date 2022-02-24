@@ -8,7 +8,7 @@ FEATURES:
     - Mutiple tabs
     - Have brackets and quotes come in pairs
     - Multiline cursor
-    - User settings/customisation for text colour and maybe inputs if not too tedious
+    - Customisation for inputs if not too tedious
     - UI?
     - Terminal?
 
