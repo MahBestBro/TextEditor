@@ -1,0 +1,5 @@
+backgroundColour 50,50,50
+textColour 0,0,0
+lineNumColour 255,0,0
+cursorColour 0,255,0
+highlightColour 0,255,0,83
