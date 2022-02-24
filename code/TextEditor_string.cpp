@@ -1,5 +1,6 @@
 #include <windows.h>
 #include "TextEditor_defs.h"
+#include "TextEditor.h"
 
 void IntToString(int val, char* buffer)
 {
@@ -21,6 +22,57 @@ void IntToString(int val, char* buffer)
     }
 
     buffer[len] = 0;
+}
+
+//TODO: Support multiple bases?
+int StringToInt(char* str, int len, bool* success = nullptr)
+{
+    if (len == 1 && str[0] == '-')
+    {
+        if (success) *success = false;
+        return -1;
+    }
+
+    int result = 0;
+    int powOf10 = 1;
+    int sign = (str[0] == '-') ? 1 : -1;
+    for (int i = len - 1; i >= (int)(str[0] == '-'); --i)
+    {
+        if (i == 0 && str[i] == '-') continue;
+
+        int digit = str[i] - '0';
+        if (digit < 0 || digit > 9)
+        {
+            if (success) *success = false;
+            return -1;
+        }
+            
+        result += digit * powOf10;
+        powOf10 *= 10;
+    }
+
+    return result * sign;
+}
+
+//TODO: Overflow check
+byte StringToByte(char* str, int len, bool* success = nullptr)
+{
+    byte result = 0;
+    byte powOf10 = 1;
+    for (int i = len - 1; i >= 0; --i)
+    {
+        byte digit = str[i] - '0';
+        if (digit < 0 || digit > 9)
+        {
+            if (success) *success = false;
+            return 0;
+        }
+            
+        result += digit * powOf10;
+        powOf10 *= 10;
+    }
+
+    return result;
 }
 
 char** SplitStringByLines(char* str, int* len)
@@ -54,6 +106,18 @@ char** SplitStringByLines(char* str, int* len)
         
     if (len) *len = numStrings;
     return result;
+}
+
+char* AdvanceToNextLine(char* file)
+{
+    while (file[0] != '\n') 
+    {
+        if (file[0] == 0)
+            return nullptr;
+        file++;
+    }
+    file++;
+    return file;
 }
 
 char* ReverseString(char* str, int len)
