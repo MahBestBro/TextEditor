@@ -3,6 +3,7 @@
 #include "TextEditor.h"
 #include "TextEditor_input.h"
 #include "TextEditor_string.h"
+#include "TextEditor_config.h"
 
 #define CURSOR_HEIGHT 18
 #define PIXELS_UNDER_BASELINE 5
@@ -10,16 +11,6 @@
 extern Input input;
 extern FontChar fontChars[128];
 extern ScreenBuffer screenBuffer;
-
-struct Colour
-{
-    byte r, g, b;
-};
-
-struct ColourRGBA
-{
-    byte r, g, b, a;
-};
 
 struct Rect
 {
@@ -221,6 +212,7 @@ void Draw8bppPixels(Rect rect, byte* pixels, int stride, Colour colour, Rect lim
     int drawWidth = rect.right - rect.left;
     int drawHeight = rect.top - rect.bottom;
 
+
     int start = (rect.left + rect.bottom * screenBuffer.width) * PIXEL_IN_BYTES;
 	byte* row = (byte*)screenBuffer.memory + start;
 	for (int y = drawHeight - 1; y >= 0; --y)
@@ -228,15 +220,28 @@ void Draw8bppPixels(Rect rect, byte* pixels, int stride, Colour colour, Rect lim
         byte* pixel = row;
         for (int x = 0; x < drawWidth; ++x)
         {
-            byte* drawnPixel = pixels + stride * (y + pixelColStart) + x + pixelRowStart;
-            byte drawnR = (byte)(*drawnPixel / 255.0f * colour.r);
-            byte drawnB = (byte)(*drawnPixel / 255.0f * colour.b);
-            byte drawnG = (byte)(*drawnPixel / 255.0f * colour.g);
-            *pixel = 255 - *drawnPixel + drawnB;
+            
+            byte* greyScalePixel = pixels + stride * (y + pixelColStart) + x + pixelRowStart;
+            
+            byte scaledR =  (byte)(*greyScalePixel / 255.0f * colour.r);
+            byte scaledB =  (byte)(*greyScalePixel / 255.0f * colour.b);
+            byte scaledG =  (byte)(*greyScalePixel / 255.0f * colour.g);
+            
+            float alphaA = *greyScalePixel / 255.f;
+            float alphaB = 1.f;
+            float drawnAlpha = alphaA + alphaB * (1.f - alphaA);
+            byte pixelB = pixel[0];
+            byte pixelG = pixel[1];
+            byte pixelR = pixel[2];
+            byte drawnR = (byte)((scaledR*alphaA + pixelR*alphaB*(1 - alphaA)) / drawnAlpha);
+            byte drawnG = (byte)((scaledB*alphaA + pixelG*alphaB*(1 - alphaA)) / drawnAlpha);
+            byte drawnB = (byte)((scaledG*alphaA + pixelB*alphaB*(1 - alphaA)) / drawnAlpha);
+            
+            *pixel = drawnB;
             pixel++;
-            *pixel = 255 - *drawnPixel + drawnG;
+            *pixel = drawnG;
             pixel++;
-            *pixel = 255 - *drawnPixel + drawnR;
+            *pixel = drawnR;
             pixel++;
             *pixel = 0;
             pixel++;
@@ -1297,12 +1302,16 @@ TimedEvent repeatAction = {0.02f};
 bool capslockOn = false;
 bool nonCharKeyPressed = false;
 
+UserSettings userSettings;
+
 void Init()
 {
     for (int i = 0; i < MAX_LINES; ++i)
     {
         editor.lines[i] = InitLine();
     }
+
+    userSettings = LoadUserSettingsFromConfigFile();
 }
 
 void Draw(float dt)
@@ -1493,7 +1502,7 @@ void Draw(float dt)
 
     //Draw Background
     Rect screenDims = {0, screenBuffer.width, 0, screenBuffer.height};
-    DrawRect(screenDims, {255, 255, 255});
+    DrawRect(screenDims, userSettings.backgroundColour);
     
     //Get correct position for cursor
     const IntPair start = {52, screenBuffer.height - CURSOR_HEIGHT}; 
@@ -1540,7 +1549,11 @@ void Draw(float dt)
         char lineNumText[8];
         IntToString(i + 1, lineNumText);
         int lineNumOffset = (fontChars[' '].advance) * 4;
-        DrawText(lineNumText, start.x - lineNumOffset, y, {255, 0, 0}, {0, 0, yBottomLimit, 0});
+        DrawText(lineNumText, 
+                 start.x - lineNumOffset, 
+                 y, 
+                 userSettings.lineNumColour, 
+                 {0, 0, yBottomLimit, 0});
     }
 
     //Draw highlighted text
@@ -1562,7 +1575,7 @@ void Draw(float dt)
         if (editor.lines[highlightInfo.top.line].len == 0) topXOffset = fontChars[' '].advance;
         DrawAlphaRect(
             {topX, topX + topHighlightPixelLength, topY, topY + CURSOR_HEIGHT},
-            {0, 255, 0, 255 / 3}, 
+            userSettings.highlightColour, 
             textBounds
         );
 
@@ -1575,7 +1588,7 @@ void Draw(float dt)
             int y = start.y - i * CURSOR_HEIGHT - PIXELS_UNDER_BASELINE + editor.textOffset.y;
             DrawAlphaRect(
                 {x, x + highlightedPixelLength, y, y + CURSOR_HEIGHT}, 
-                {0, 255, 0, 255 / 3}, 
+                userSettings.highlightColour, 
                 textBounds
             );
         }
@@ -1593,7 +1606,7 @@ void Draw(float dt)
                 bottomHighlightPixelLength = fontChars[' '].advance;
             DrawAlphaRect(
                 {bottomX, bottomX + bottomHighlightPixelLength, bottomY, bottomY + CURSOR_HEIGHT}, 
-                {0, 255, 0, 255 / 3}, 
+                userSettings.highlightColour, 
                 textBounds
             );
         }
@@ -1617,6 +1630,6 @@ void Draw(float dt)
         const int CURSOR_WIDTH = 2;
         Rect cursorDims = {cursorDrawPos.x, cursorDrawPos.x + CURSOR_WIDTH, 
                            cursorDrawPos.y, cursorDrawPos.y + CURSOR_HEIGHT};
-        DrawRect(cursorDims, {0, 255, 0});
+        DrawRect(cursorDims, userSettings.cursorColour);
     }
 }
