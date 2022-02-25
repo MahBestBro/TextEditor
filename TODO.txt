@@ -1,6 +1,8 @@
 There's no strict order but generally speaking the closer to the top the more important
 
 FEATURES: 
+    - Move cursor and highlight with mouse
+    - Brighten up current line
     - Syntax highlighting
     - Wrap Text
     - Find and Replace
@@ -23,7 +25,6 @@ LIST OF COMMANDS TO IMPLEMENT:
     -
     - Ctrl+Shift+C: Opens command prompt
     - Ctrl+Shift+F: Highlights all instances of word in file
-    - Ctrl+Shift+L: Delete Line
     - Ctrl+Shift+N: Opens New Window (do we want this?)
     - Ctrl+Shift+Q: Closes Window
 
