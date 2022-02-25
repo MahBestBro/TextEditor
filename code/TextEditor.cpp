@@ -77,17 +77,21 @@ struct KeyCommand
 
 bool KeyCommandDown(KeyCommand keyCommand)
 {
+	if (InputDown(input.letterKeys['L' - 'A']))
+	{
+		Assert(true);
+	}
+
     Assert(keyCommand.initialHeldKeys);
 
-    bool result = InputDown(input.flags[keyCommand.commandKey]);
-    if ((keyCommand.initialHeldKeys & CTRL) == CTRL)
-        result = result && InputHeld(input.leftCtrl);
-    if ((keyCommand.initialHeldKeys & ALT) == ALT)
-        result = result && InputHeld(input.leftAlt);
-    if ((keyCommand.initialHeldKeys & SHIFT) == SHIFT)
-        result = result && InputHeld(input.leftShift);
+    bool commandKeyDown = InputDown(input.flags[keyCommand.commandKey]);
     
-    return result;
+    byte heldInitialKeys = 0b000;
+    heldInitialKeys |= (byte)InputHeld(input.leftCtrl);
+    heldInitialKeys |= (byte)InputHeld(input.leftAlt) << 1;
+    heldInitialKeys |= (byte)InputHeld(input.leftShift) << 2;
+    
+    return commandKeyDown && (heldInitialKeys == keyCommand.initialHeldKeys);
 }
 
 #define QuickSort(arr, len, elSize) qsort(arr, len, elSize, _qsortCompare)
@@ -250,6 +254,7 @@ void Draw8bppPixels(Rect rect, byte* pixels, int stride, Colour colour, Rect lim
     }
 }
 
+//Consider making this non c-string dependent
 void DrawText(char* text, int xCoord, int yCoord, Colour colour, Rect limits = {0})
 {
     char* at = text; 
@@ -777,6 +782,8 @@ void UnTab()
                 editor.cursorPos.textAt -= min(numRemoved, editor.cursorPos.textAt - destIndex);
             if (editor.highlightStart.line == lineAt)
                 editor.highlightStart.textAt -= min(numRemoved, editor.highlightStart.textAt - destIndex);
+
+            SetTopChangedLine(lineAt);
         }
 
         int textByLineIndex = lineAt - editor.cursorPos.line;
@@ -794,7 +801,6 @@ void UnTab()
         editor.undoStack[editor.numUndos - 1].type = UNDOTYPE_MULTILINE_REMOVE;
         editor.undoStack[editor.numUndos - 1].end.line = highlight.bottom.line;
     }
-    
 }
 
 //Inserts line without messing around with the cursor indicies
@@ -845,6 +851,8 @@ void Enter()
 
         editor.cursorPos.textAt = 0;
 
+        SetTopChangedLine((copiedLen > 0) ? prevLineIndex : editor.cursorPos.line);
+
         editor.undoStack[editor.numUndos - 1].end = editor.cursorPos;
     }
 
@@ -860,10 +868,10 @@ void HighlightCurrentLine()
         editor.highlightStart.line = editor.cursorPos.line;
     }
 
-    if (editor.cursorPos.line < MAX_LINES - 1)
+    if (editor.cursorPos.line < editor.numLines - 1)
     {
         editor.cursorPos.textAt = 0;
-        editor.cursorPos.line++;
+        editor.cursorPos.line += editor.cursorPos.line + 1 < MAX_LINES;
     }
     else 
     {
@@ -877,6 +885,43 @@ void HighlightEntireFile()
     editor.highlightStart.line = 0;
     editor.cursorPos.textAt = editor.lines[editor.numLines - 1].len;
     editor.cursorPos.line = editor.numLines - 1;
+}
+
+void RemoveCurrentLine()
+{
+    int removedLine = editor.cursorPos.line;
+    bool isLastLine = removedLine == editor.numLines - 1;
+
+    //Thanks C++ for not allowing me to use a ternary statement with these :).
+    EditorPos undoStart = {0, removedLine};
+    //This if is to make undo actually insert a new line if we were at the last line. A tad annoying but hey.
+    if (isLastLine && editor.numLines != 1) 
+        undoStart = {editor.lines[removedLine - 1].len, removedLine - 1};
+    EditorPos undoEnd = {editor.lines[removedLine].len, removedLine};
+    AddToUndoStack(undoStart, undoEnd, UNDOTYPE_REMOVED_TEXT_SECTION);
+
+    for (int i = removedLine + 1; i < editor.numLines; ++i)
+        editor.lines[i-1] = editor.lines[i];
+    
+    if (editor.numLines == 1)
+    {
+        editor.lines[removedLine].len = 0;
+        editor.lines[removedLine].text[0] = 0;
+        editor.cursorPos.textAt = 0;
+    }
+    else 
+    {
+        editor.cursorPos.line -= isLastLine;
+        editor.cursorPos.textAt = 
+            min(editor.lines[editor.cursorPos.line].len, editor.cursorPos.textAt);
+    }
+
+    //This needs to happen here so that the above if statement works properly
+    editor.numLines -= (editor.numLines != 1);
+
+    ClearHighlights();
+    
+    SetTopChangedLine(editor.cursorPos.line);
 }
 
 //TODO: Double check if this is susceptable to overflow attacks and Unix Compatability
@@ -960,9 +1005,10 @@ void InsertText(char** textAsLines, TextSectionInfo sectionInfo)
         editor.cursorPos.textAt += lastLineLen;
     else
         editor.cursorPos.textAt = lastLineLen;
+
+    SetTopChangedLine(sectionInfo.top.line);
 }
 
-//TODO: There's some sort of malloc/realloc bug in the InsertText call that's causing heap corruption but I cannot find it, this may be a doozy
 void Paste()
 {
     char* textToPaste = GetClipboardText();
@@ -1465,6 +1511,7 @@ void Draw(float dt)
                 {CTRL, INPUTCODE_A},
                 {CTRL, INPUTCODE_C},
                 {CTRL, INPUTCODE_L},
+                {CTRL | SHIFT, INPUTCODE_L},
                 {CTRL, INPUTCODE_O},
                 {CTRL, INPUTCODE_S},
                 {CTRL | SHIFT, INPUTCODE_S},
@@ -1479,6 +1526,7 @@ void Draw(float dt)
                 HighlightEntireFile,
                 CopyHighlightedText,
                 HighlightCurrentLine,
+                RemoveCurrentLine,
                 OpenFile,
                 Save,
                 SaveAs,
@@ -1493,6 +1541,7 @@ void Draw(float dt)
                 if (KeyCommandDown(keyCommands[i]))
                 {
                     keyCommandCallbacks[i]();
+                    break;
                 }
             }
         }
