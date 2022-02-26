@@ -531,6 +531,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                 win32_HandleInputDown(&input.numberKeys[vkCode - '0']);
             else if (vkCode >= VK_LEFT && vkCode <= VK_DOWN)
                 win32_HandleInputDown(&input.arrowKeys[vkCode - VK_LEFT]);
+            //else if (vkCode >= VK_F1 && <= VK_F12)
+            //    win32_HandleInputDown(&input.fKeys[vkCode - VK_F1]);
+            else if (vkCode == VK_F5)
+                win32_HandleInputDown(&input.f5);
             else if (vkCode == VK_BACK)
                 win32_HandleInputDown(&input.backspace);
             else if (vkCode == VK_SHIFT || vkCode == VK_LSHIFT)
@@ -581,6 +585,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                 win32_HandleInputUp(&input.numberKeys[vkCode - '0']);
             else if (vkCode >= VK_LEFT && vkCode <= VK_DOWN)
                 win32_HandleInputUp(&input.arrowKeys[vkCode - VK_LEFT]);
+            //else if (vkCode >= VK_F1 && <= VK_F12)
+            //    win32_HandleInputUp(&input.fKeys[vkCode - VK_F1]);
+            else if (vkCode == VK_F5)
+                win32_HandleInputUp(&input.f5);
             else if (vkCode == VK_BACK)
                 win32_HandleInputUp(&input.backspace);
             else if (vkCode == VK_SHIFT || vkCode == VK_LSHIFT)
