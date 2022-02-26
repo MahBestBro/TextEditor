@@ -29,8 +29,10 @@ LIST OF COMMANDS TO IMPLEMENT:
     - Ctrl+Shift+Q: Closes Window
 
 PROGRAMMING/REFACTORING:
+    - Make a "win32Free" function so I don't have to include windows.h and screw function names over
     - Consider removing editor moving side effects from functions?
     - Consider moving away from c-string (i.e., make string lib or find good string lib)
+    - Figure out that HH way of including files, speeds up build times
     - Have a function that can map a callback function to an input
         - Pass in inputcode and function poitner, then creates a timed event mapped to input 
           code.
