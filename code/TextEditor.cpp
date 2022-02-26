@@ -238,8 +238,8 @@ void Draw8bppPixels(Rect rect, byte* pixels, int stride, Colour colour, Rect lim
             byte pixelG = pixel[1];
             byte pixelR = pixel[2];
             byte drawnR = (byte)((scaledR*alphaA + pixelR*alphaB*(1 - alphaA)) / drawnAlpha);
-            byte drawnG = (byte)((scaledB*alphaA + pixelG*alphaB*(1 - alphaA)) / drawnAlpha);
-            byte drawnB = (byte)((scaledG*alphaA + pixelB*alphaB*(1 - alphaA)) / drawnAlpha);
+            byte drawnG = (byte)((scaledG*alphaA + pixelG*alphaB*(1 - alphaA)) / drawnAlpha);
+            byte drawnB = (byte)((scaledB*alphaA + pixelB*alphaB*(1 - alphaA)) / drawnAlpha);
             
             *pixel = drawnB;
             pixel++;
@@ -255,7 +255,8 @@ void Draw8bppPixels(Rect rect, byte* pixels, int stride, Colour colour, Rect lim
 }
 
 //Consider making this non c-string dependent
-void DrawText(char* text, int xCoord, int yCoord, Colour colour, Rect limits = {0})
+//TE because DrawText already in windows.h hnnnngh
+void DrawText_TE(char* text, int xCoord, int yCoord, Colour colour, Rect limits = {0})
 {
     char* at = text; 
 	int xAdvance = 0;
@@ -1098,6 +1099,7 @@ void OpenFile()
 
         free(fileLines);
         free(fileName);
+        VirtualFree(file, 0, MEM_RELEASE);
 
         editor.topChangedLineIndex = -1;
     }
@@ -1499,9 +1501,13 @@ void Draw(float dt)
         else
             holdAction.elapsedTime = 0.0f;
 
+
         if (InputDown(input.capsLock))
             capslockOn = !capslockOn;
-            
+
+        if (InputDown(input.f5))
+            userSettings = LoadUserSettingsFromConfigFile();
+
 
         if (!inputHeld)
         {
@@ -1592,17 +1598,17 @@ void Draw(float dt)
         //Draw text
         int x = start.x - editor.textOffset.x;
         int y = start.y - i * CURSOR_HEIGHT + editor.textOffset.y;
-        DrawText(editor.lines[i].text, x, y, {0}, textBounds);
+        DrawText_TE(editor.lines[i].text, x, y, userSettings.textColour, textBounds);
 
         //Draw Line num
         char lineNumText[8];
         IntToString(i + 1, lineNumText);
         int lineNumOffset = (fontChars[' '].advance) * 4;
-        DrawText(lineNumText, 
-                 start.x - lineNumOffset, 
-                 y, 
-                 userSettings.lineNumColour, 
-                 {0, 0, yBottomLimit, 0});
+        DrawText_TE(lineNumText, 
+                    start.x - lineNumOffset, 
+                    y, 
+                    userSettings.lineNumColour, 
+                    {0, 0, yBottomLimit, 0});
     }
 
     //Draw highlighted text
