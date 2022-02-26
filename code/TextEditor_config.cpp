@@ -1,3 +1,5 @@
+#include <windows.h>
+
 #include "TextEditor_defs.h"
 #include "TextEditor.h"
 #include "TextEditor_string.h"
@@ -39,6 +41,7 @@ UserSettings LoadUserSettingsFromConfigFile()
     UserSettings result = {};
 
     char* file = ReadEntireFile("config/config_general.txt");
+    Assert(file);
 
     int numLines = 0;
     char** lines = SplitStringByLines(file, &numLines);
@@ -124,6 +127,8 @@ UserSettings LoadUserSettingsFromConfigFile()
     for (int i = 0; i < numLines; ++i)
         free(lines[i]);
     free(lines);
+
+    VirtualFree(file, 0, MEM_RELEASE);
 
     return result;
 }
