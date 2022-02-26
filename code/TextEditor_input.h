@@ -18,6 +18,19 @@ enum InputCode
     INPUTCODE_UP,
     INPUTCODE_DOWN,
 
+    INPUTCODE_F1,
+    //INPUTCODE_F2,
+    //INPUTCODE_F3,
+    //INPUTCODE_F4,
+    //INPUTCODE_F5,
+    //INPUTCODE_F6,
+    //INPUTCODE_F7,
+    //INPUTCODE_F8,
+    //INPUTCODE_F9,
+    //INPUTCODE_F10,
+    //INPUTCODE_F11,
+    //INPUTCODE_F12,
+
     INPUTCODE_BACKSPACE,
     INPUTCODE_LSHIFT,
     INPUTCODE_LCTRL,
@@ -92,7 +105,9 @@ enum InputCode
 #define NUMBER_START INPUTCODE_0
 #define PUNCTUATION_START INPUTCODE_OPEN_SQ_BRACKET
 #define OTHER_SYMBOLS_START INPUTCODE_BACK_SLASH
+#define NUM_CHAR_KEYS (int)(NUM_INPUTS - CHAR_KEYS_START)
 
+//TODO: Consider just having the flags array?
 union Input
 {
     struct
@@ -112,6 +127,8 @@ union Input
             };
             byte arrowKeys[4];
         };  
+
+        byte f5;
 
         byte backspace;
         byte leftShift;
@@ -137,6 +154,7 @@ union Input
 
 char* InputCodeToStr(InputCode code);
 char InputCodeToChar(InputCode code, bool shift, bool caps);
+InputCode CharToInputCode(char c);
 
 inline bool InputDown(byte inputFlags)
 {
