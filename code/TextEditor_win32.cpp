@@ -11,9 +11,15 @@
 #include FT_FREETYPE_H 
 
 #include "TextEditor_defs.h"
-#include "TextEditor.h"
 #include "TextEditor_input.h"
+#include "TextEditor.h"
 #include "TextEditor_string.h"
+#include "TextEditor_config.h"
+
+#include "TextEditor_input.cpp"
+#include "TextEditor.cpp"
+#include "TextEditor_string.cpp"
+#include "TextEditor_config.cpp"
 
 Input input = {};
 FontChar fontChars[128];
@@ -22,12 +28,11 @@ ScreenBuffer screenBuffer;
 global_variable BITMAPINFO bitmapInfo;
 global_variable bool running;
 
-wchar* CStrToWStr(const char *c)
+wchar* CStrToWStr(const char* c)
 {
-    const size_t cSize = StringLen(c)+1;
-    wchar* wc = (wchar*)malloc(cSize * sizeof(wchar));
-    mbstowcs_s(0, wc, cSize, c, cSize+1);
-
+    const size_t cSize = StringLen(c) + 1;
+    wchar* wc = HeapAlloc(wchar, cSize);
+    mbstowcs_s(0, wc, cSize, c, cSize + 1);
     return wc;
 }
 
@@ -44,6 +49,11 @@ void Print(const char* message)
     wchar* msg = CStrToWStr(message);
     OutputDebugString(msg);
     free(msg);
+}
+
+void FreeWin32(void* mem)
+{
+    VirtualFree(mem, 0, MEM_RELEASE);
 }
 
 char* ReadEntireFile(char* fileName, uint32* fileLen)
