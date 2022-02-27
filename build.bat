@@ -4,7 +4,6 @@ set commonCompilerFlags= -nologo -MDd -Gm- -GR- -EHa- -Od -Oi -WX -W4 -wd4201 -w
 set commonLinkerFlags= -incremental:no -opt:ref  
 set libraries= user32.lib gdi32.lib shell32.lib Comdlg32.lib freetyped.lib
 set includeDirs= includes
-set cppFiles= code\TextEditor_win32.cpp code\TextEditor.cpp code\TextEditor_input.cpp code\TextEditor_string.cpp code\TextEditor_config.cpp
 
 rem -GR- and -EHa- turn off exception handling stuff
 rem -Oi turns on commpiler intrisics (replaces c functions if it knows how to do it in assembly)
@@ -32,9 +31,10 @@ TextEditor_config_code_generator.exe
 
 popd
 
+
 rem Debug build
 del *.pdb > NUL 2> NUL
-cl  %commonCompilerFlags% /EHsc %cppFiles% /I %includeDirs% /link %commonLinkerFlags% -libpath:"lib" %libraries% /out:TextEditor.exe  
+cl  %commonCompilerFlags% /EHsc code\TextEditor_win32.cpp /I %includeDirs% /link %commonLinkerFlags% -libpath:"lib" %libraries% /out:TextEditor.exe  
 
 
 
