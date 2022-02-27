@@ -25,7 +25,7 @@ void IntToString(int val, char* buffer)
 }
 
 //TODO: Support multiple bases?
-int StringToInt(char* str, int len, bool* success = nullptr)
+int StringToInt(char* str, int len, bool* success)
 {
     if (len == 1 && str[0] == '-')
     {
@@ -55,7 +55,7 @@ int StringToInt(char* str, int len, bool* success = nullptr)
 }
 
 //TODO: Overflow check
-byte StringToByte(char* str, int len, bool* success = nullptr)
+byte StringToByte(char* str, int len, bool* success)
 {
     byte result = 0;
     byte powOf10 = 1;
