@@ -1,4 +1,5 @@
 #include "stdio.h"
+#include "stdlib.h"
 
 #include "TextEditor_defs.h"
 #include "TextEditor_input.h"
@@ -18,6 +19,16 @@ struct FontChar
     uint32 left, top;     // Offset from baseline to left/top of glyph
     uint32 advance;       // Offset to advance to next glyph
     void* pixels;
+};
+
+struct Colour
+{
+    byte r, g, b;
+};
+
+struct ColourRGBA
+{
+    byte r, g, b, a;
 };
 
 struct IntPair
@@ -138,6 +149,8 @@ inline void* dbg_malloc(size_t size, const char* file, int line)
     Print(msg);
     return malloc(size);
 }
+
+void FreeWin32(void* memory);
 
 char* ReadEntireFile(char* fileName, uint32* fileLen  = nullptr);
 bool WriteToFile(char* fileName, char* text, uint64 textLen, bool overwrite, int32 writeStart = 0);
