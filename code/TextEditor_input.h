@@ -7,6 +7,11 @@
 #define INPUT_UP   0b010
 #define INPUT_HELD 0b100
 
+struct IntPair
+{
+    int x, y;
+};
+
 enum InputCode
 {
     INPUTCODE_LEFT_MOUSE,
@@ -108,48 +113,53 @@ enum InputCode
 #define NUM_CHAR_KEYS (int)(NUM_INPUTS - CHAR_KEYS_START)
 
 //TODO: Consider just having the flags array?
-union Input
+struct Input
 {
-    struct
+    IntPair mousePixelPos;
+
+    union
     {
-        byte leftMouse;
-        byte rightMouse;
-        byte middleMouse;
-
-        union
+        struct
         {
-            struct
+            byte leftMouse;
+            byte rightMouse;
+            byte middleMouse;
+
+            union
             {
-                byte left;
-                byte up;
-                byte right;
-                byte down;
-            };
-            byte arrowKeys[4];
-        };  
+                struct
+                {
+                    byte left;
+                    byte up;
+                    byte right;
+                    byte down;
+                };
+                byte arrowKeys[4];
+            };  
 
-        byte f5;
+            byte f5;
 
-        byte backspace;
-        byte leftShift;
-        byte leftCtrl;
-        byte leftAlt;
-        byte capsLock;
-        byte enter;
+            byte backspace;
+            byte leftShift;
+            byte leftCtrl;
+            byte leftAlt;
+            byte capsLock;
+            byte enter;
 
-        byte space;
-        byte tab;
+            byte space;
+            byte tab;
 
-        byte letterKeys[26];
-        byte numberKeys[10];
-        byte punctuation[7];
-        byte backslash;
-        byte minus;
-        byte equals;
-        byte grave;
-        
+            byte letterKeys[26];
+            byte numberKeys[10];
+            byte punctuation[7];
+            byte backslash;
+            byte minus;
+            byte equals;
+            byte grave;
+
+        };
+        byte flags[NUM_INPUTS];
     };
-    byte flags[NUM_INPUTS];
 };
 
 char* InputCodeToStr(InputCode code);
