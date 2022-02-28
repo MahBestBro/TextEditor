@@ -3,6 +3,7 @@
 #endif
 
 #include <windows.h> 
+#include <windowsx.h>
 #include <commdlg.h>
 
 #include "stdio.h"
@@ -440,6 +441,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         //for (int i = 0; i < NUM_INPUTS; ++i)
         //    win32_LogInput((InputCode)i);
 
+        //wchar log[100];
+        //swprintf_s(log, L"MousePos: {%i, %i}.\n", input.mousePixelPos.x, input.mousePixelPos.y);
+        //OutputDebugString(log);
+
         win32_ProcessInput();
 
         MSG msg;
@@ -529,6 +534,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
         case WM_MBUTTONUP:
             win32_HandleInputUp(&input.middleMouse);
+            return 0;
+
+        case WM_MOUSEMOVE:
+            input.mousePixelPos.x = GET_X_LPARAM(lParam); 
+            input.mousePixelPos.y = screenBuffer.height - GET_Y_LPARAM(lParam);
             return 0;
 
         case WM_SYSKEYDOWN:
