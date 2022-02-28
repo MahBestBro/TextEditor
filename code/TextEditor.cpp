@@ -5,6 +5,7 @@
 #include "TextEditor_string.h"
 #include "TextEditor_config.h"
 
+#define TEXT_X_OFFSET 52
 #define CURSOR_HEIGHT 18
 #define PIXELS_UNDER_BASELINE 5
 
@@ -1508,6 +1509,23 @@ void Draw(float dt)
         if (InputDown(input.f5))
             userSettings = LoadUserSettingsFromConfigFile();
 
+        if (InputDown(input.leftMouse))
+        {
+            int mouseLine = (screenBuffer.height - input.mousePixelPos.y) / CURSOR_HEIGHT;
+            editor.cursorPos.line = min(mouseLine, editor.numLines - 1);
+
+            int linePixLen = TEXT_X_OFFSET;
+            int cursorTextAt = 0;
+            Line line = editor.lines[editor.cursorPos.line];
+            while (linePixLen < input.mousePixelPos.x && cursorTextAt < line.len)
+            {
+                linePixLen += fontChars[line.text[cursorTextAt]].advance;
+                cursorTextAt++;
+            }
+            editor.cursorPos.textAt = cursorTextAt;
+        }
+
+
 
         if (!inputHeld)
         {
@@ -1560,7 +1578,7 @@ void Draw(float dt)
     DrawRect(screenDims, userSettings.backgroundColour);
     
     //Get correct position for cursor
-    const IntPair start = {52, screenBuffer.height - CURSOR_HEIGHT}; 
+    const IntPair start = {TEXT_X_OFFSET, screenBuffer.height - CURSOR_HEIGHT}; 
     IntPair cursorDrawPos = start;
     for (int i = 0; i < editor.cursorPos.textAt; ++i)
         cursorDrawPos.x += fontChars[editor.lines[editor.cursorPos.line].text[i]].advance;
