@@ -1337,6 +1337,50 @@ void Redo()
     HandleUndoInfo(redoInfo, true);
 }
 
+void MoveCursorToMouse()
+{
+    int mouseLine = (screenBuffer.height - input.mousePixelPos.y) / CURSOR_HEIGHT;
+    editor.cursorPos.line = min(mouseLine, editor.numLines - 1);
+    
+    int linePixLen = TEXT_X_OFFSET;
+    int cursorTextAt = 0;
+    Line line = editor.lines[editor.cursorPos.line];
+    while (linePixLen < input.mousePixelPos.x && cursorTextAt < line.len)
+    {
+        linePixLen += fontChars[line.text[cursorTextAt]].advance;
+        cursorTextAt++;
+    }
+
+    editor.cursorPos.textAt = cursorTextAt;
+}
+
+void HighlightWordAt(EditorPos pos)
+{
+    char startingChar = editor.lines[pos.line].text[pos.textAt];
+    if (startingChar == 0) return;
+
+    int highlightTextAtStart = pos.textAt;
+    int newCursorTextAt = pos.textAt;
+    Line line = editor.lines[pos.line]; 
+
+    bool (*correctChar)(char) = IsPunctuation; 
+    if (IsAlphaNumeric(startingChar)) correctChar = IsAlphaNumeric;
+    else if (IsInvisChar(startingChar)) correctChar = IsInvisChar;
+
+    while(correctChar(line.text[highlightTextAtStart]) || 
+          correctChar(line.text[newCursorTextAt]))
+    {
+        
+        highlightTextAtStart -= correctChar(line.text[highlightTextAtStart]) && 
+                                highlightTextAtStart > 0; 
+        newCursorTextAt += correctChar(line.text[newCursorTextAt]) && 
+                           newCursorTextAt < line.len;
+    }
+
+	editor.highlightStart = {highlightTextAtStart + 1, pos.line};
+	editor.cursorPos = {newCursorTextAt, pos.line};
+}
+
 //
 //MAIN LOOP/STUFF
 //
@@ -1347,6 +1391,10 @@ TimedEvent repeatChar = {0.02f, &AddChar};
 
 TimedEvent holdAction = {0.5f};
 TimedEvent repeatAction = {0.02f};
+
+bool canDoubleClick = false;
+bool doubleClicked = false;
+TimedEvent doubleClick = {0.5f};
 
 bool capslockOn = false;
 bool nonCharKeyPressed = false;
@@ -1509,22 +1557,33 @@ void Draw(float dt)
         if (InputDown(input.f5))
             userSettings = LoadUserSettingsFromConfigFile();
 
+
         if (InputDown(input.leftMouse))
         {
-            int mouseLine = (screenBuffer.height - input.mousePixelPos.y) / CURSOR_HEIGHT;
-            editor.cursorPos.line = min(mouseLine, editor.numLines - 1);
-
-            int linePixLen = TEXT_X_OFFSET;
-            int cursorTextAt = 0;
-            Line line = editor.lines[editor.cursorPos.line];
-            while (linePixLen < input.mousePixelPos.x && cursorTextAt < line.len)
+            ClearHighlights();
+            MoveCursorToMouse();
+    
+            if (canDoubleClick && doubleClick.elapsedTime <= doubleClick.interval)
             {
-                linePixLen += fontChars[line.text[cursorTextAt]].advance;
-                cursorTextAt++;
+                HighlightWordAt(editor.cursorPos);
+                doubleClicked = true;
             }
-            editor.cursorPos.textAt = cursorTextAt;
+            else
+            {
+                doubleClick.elapsedTime = 0.0f;
+            }
+            canDoubleClick = doubleClick.elapsedTime == 0.0f;
+            
         }
 
+        if (InputHeld(input.leftMouse))
+        {
+            InitHighlight(editor.cursorPos.textAt, editor.cursorPos.line);
+            if (!doubleClicked) MoveCursorToMouse();
+        }
+
+        if (InputUp(input.leftMouse))
+            doubleClicked = false;
 
 
         if (!inputHeld)
@@ -1569,9 +1628,14 @@ void Draw(float dt)
                 }
             }
         }
-        
-
     }
+
+    //Only caught this bug when using mouse but putting it here since may save my back in other situations
+    if (editor.highlightStart == editor.cursorPos)
+        ClearHighlights();
+
+    if (canDoubleClick)
+        doubleClick.elapsedTime += dt;
 
     //Draw Background
     Rect screenDims = {0, screenBuffer.width, 0, screenBuffer.height};
