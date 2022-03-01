@@ -24,13 +24,27 @@ inline bool IsAlphaNumeric(char c)
     return IsAlphabetical(c) || IsNumeric(c);
 }
 
+//Double check this is correct?
+inline bool IsPunctuation(char c)
+{
+    return !IsAlphaNumeric(c);
+}
+
+inline bool IsInvisChar(char c)
+{
+    return c <= ' ';
+}
+
 inline bool IsEmptyString(char* str)
 {
     return str[0] == 0;
 }
 
 void IntToString(int val, char* buffer);
+int StringToInt(char* str, int len, bool* success = nullptr);
+byte StringToByte(char* str, int len, bool* success = nullptr);
 char** SplitStringByLines(char* str, int *len = nullptr);
+char* AdvanceToNextLine(char* file);
 char* ReverseString(char* str, int len);
 
 #endif
