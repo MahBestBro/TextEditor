@@ -530,7 +530,12 @@ void AddToUndoStack(EditorPos undoStart, EditorPos undoEnd, UndoType type, bool 
     undo.prevCursorPos = editor.cursorPos;
     undo.type = type;
     if (type == UNDOTYPE_REMOVED_TEXT_SECTION || type == UNDOTYPE_OVERWRITE)
-        undo.textByLine = GetTextByLines(GetTextSectionInfo(undoStart, undoEnd));
+    {
+        //TODO: remove all the outside code that sets numLines for us that isn't necessary
+        TextSectionInfo section = GetTextSectionInfo(undoStart, undoEnd);
+        undo.textByLine = GetTextByLines(section);
+        undo.numLines = section.bottom.line - section.top.line + 1;
+    }
 
     if (redo)
         editor.redoStack[editor.numRedos++] = undo;
@@ -538,24 +543,28 @@ void AddToUndoStack(EditorPos undoStart, EditorPos undoEnd, UndoType type, bool 
         editor.undoStack[editor.numUndos++] = undo;
 }
 
-void ResetRedoStack()
+void ResetUndoStack(bool redo = false)
 {
-    for (int i = 0; i < editor.numRedos; ++i)
+    UndoInfo* stack = (redo) ? editor.redoStack : editor.undoStack;
+    int* numInStack = (redo) ? &editor.numRedos : &editor.numUndos;
+
+    for (int i = 0; i < *numInStack; ++i)
     {
-        if (editor.redoStack[i].numLines != -1)
+        if (stack[i].numLines != -1)
         {
-            for (int j = 0; j < editor.redoStack[i].numLines; ++j)
-                free(editor.redoStack[i].textByLine[i]);
-            free(editor.redoStack[i].textByLine);
+            if (stack[i].textByLine)
+            {
+                for (int j = 0; j < stack[i].numLines; ++j)
+                    free(stack[i].textByLine[i]);
+                free(stack[i].textByLine);
+            }
         }
 
-        if (editor.redoStack[i].reverseBuffer.buffer)
-        {
-            free(editor.redoStack[i].reverseBuffer.buffer);
-        }
+        if (stack[i].reverseBuffer.buffer)
+            free(stack[i].reverseBuffer.buffer);
     }
 
-    editor.numRedos = 0;
+    *numInStack = 0;
 }
 
 //
@@ -581,7 +590,7 @@ void AddChar()
         editor.cursorPos != currentUndo->end)
     {
         AddToUndoStack(editor.cursorPos, editor.cursorPos, UNDOTYPE_ADDED_TEXT);
-        ResetRedoStack();
+        ResetUndoStack(true);
     }
 
     if (editor.highlightStart.textAt != -1)
@@ -667,7 +676,7 @@ void RemoveChar()
         AddToUndoStack(editor.cursorPos, editor.cursorPos, UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER);
 		reverseBuffer = &editor.undoStack[editor.numUndos - 1].reverseBuffer;
 		reverseBuffer->buffer = HeapAlloc(char, reverseBuffer->size);
-        ResetRedoStack();
+        ResetUndoStack(true);
     }
 	else
 	{
@@ -724,7 +733,7 @@ void Backspace()
         editor.undoStack[editor.numUndos - 1].wasHighlight = true;
         TextSectionInfo highlightInfo = GetTextSectionInfo(editor.highlightStart, editor.cursorPos);
         editor.undoStack[editor.numUndos - 1].textByLine = GetTextByLines(highlightInfo);
-        ResetRedoStack();
+        ResetUndoStack(true);
         
         RemoveTextSection(highlightInfo);
         ClearHighlights();
@@ -822,7 +831,7 @@ void Enter()
     if (editor.numLines < MAX_LINES)
     { 
         AddToUndoStack(editor.cursorPos, editor.cursorPos, UNDOTYPE_ADDED_TEXT);
-        ResetRedoStack();
+        ResetUndoStack(true);
         if (editor.highlightStart.textAt != -1)
         {
             TextSectionInfo highlightInfo = GetTextSectionInfo(editor.highlightStart, 
@@ -894,11 +903,7 @@ void RemoveCurrentLine()
     int removedLine = editor.cursorPos.line;
     bool isLastLine = removedLine == editor.numLines - 1;
 
-    //Thanks C++ for not allowing me to use a ternary statement with these :).
-    EditorPos undoStart = {0, removedLine};
-    //This if is to make undo actually insert a new line if we were at the last line. A tad annoying but hey.
-    if (isLastLine && editor.numLines != 1) 
-        undoStart = {editor.lines[removedLine - 1].len, removedLine - 1};
+    EditorPos undoStart = {editor.lines[removedLine - 1].len, removedLine - 1}; //This is to make undo actually insert a new line. A tad annoying but hey.
     EditorPos undoEnd = {editor.lines[removedLine].len, removedLine};
     AddToUndoStack(undoStart, undoEnd, UNDOTYPE_REMOVED_TEXT_SECTION);
 
@@ -920,6 +925,7 @@ void RemoveCurrentLine()
 
     //This needs to happen here so that the above if statement works properly
     editor.numLines -= (editor.numLines != 1);
+    //editor.undoStack[editor.numUndos - 1].end = 
 
     ClearHighlights();
     
@@ -1021,7 +1027,7 @@ void Paste()
         free(textToPaste);
 
         AddToUndoStack(editor.cursorPos, editor.cursorPos, UNDOTYPE_ADDED_TEXT);
-        ResetRedoStack();
+        ResetUndoStack(true);
 
 		if (editor.highlightStart.textAt != -1)
         {
@@ -1067,13 +1073,13 @@ void CutHighlightedText()
     AddToUndoStack(editor.highlightStart, editor.cursorPos, UNDOTYPE_REMOVED_TEXT_SECTION);
     TextSectionInfo highlightInfo = GetTextSectionInfo(editor.highlightStart, editor.cursorPos);
     editor.undoStack[editor.numUndos - 1].textByLine = GetTextByLines(highlightInfo);
-    ResetRedoStack();
+    ResetUndoStack(true);
 
     RemoveTextSection(GetTextSectionInfo(editor.highlightStart, editor.cursorPos));
     ClearHighlights();
 }
 
-//TODO: Resize editor.lines if file too big
+//TODO: Resize editor.lines if file too big + maybe return success bool?
 void OpenFile()
 {
     size_t fileNameLen = 0;
@@ -1102,7 +1108,11 @@ void OpenFile()
         free(fileName);
         FreeWin32(file);
 
+        ResetUndoStack();
+        ResetUndoStack(true);
+
         editor.topChangedLineIndex = -1;
+        editor.cursorPos = {0, 0};
     }
 }
 
@@ -1337,21 +1347,22 @@ void Redo()
     HandleUndoInfo(redoInfo, true);
 }
 
-void MoveCursorToMouse()
+EditorPos GetEditorPosAtMouse()
 {
+    EditorPos result;
     int mouseLine = (screenBuffer.height - input.mousePixelPos.y) / CURSOR_HEIGHT;
-    editor.cursorPos.line = min(mouseLine, editor.numLines - 1);
+    result.line = min(mouseLine, editor.numLines - 1);
     
     int linePixLen = TEXT_X_OFFSET;
-    int cursorTextAt = 0;
-    Line line = editor.lines[editor.cursorPos.line];
-    while (linePixLen < input.mousePixelPos.x && cursorTextAt < line.len)
+    result.textAt = 0;
+    Line line = editor.lines[result.line];
+    while (linePixLen < input.mousePixelPos.x && result.textAt < line.len)
     {
-        linePixLen += fontChars[line.text[cursorTextAt]].advance;
-        cursorTextAt++;
+        linePixLen += fontChars[line.text[result.textAt]].advance;
+        result.textAt++;
     }
 
-    editor.cursorPos.textAt = cursorTextAt;
+    return result;
 }
 
 void HighlightWordAt(EditorPos pos)
@@ -1367,17 +1378,13 @@ void HighlightWordAt(EditorPos pos)
     if (IsAlphaNumeric(startingChar)) correctChar = IsAlphaNumeric;
     else if (IsInvisChar(startingChar)) correctChar = IsInvisChar;
 
-    while(correctChar(line.text[highlightTextAtStart]) || 
-          correctChar(line.text[newCursorTextAt]))
-    {
-        
-        highlightTextAtStart -= correctChar(line.text[highlightTextAtStart]) && 
-                                highlightTextAtStart > 0; 
-        newCursorTextAt += correctChar(line.text[newCursorTextAt]) && 
-                           newCursorTextAt < line.len;
-    }
+    while (correctChar(line.text[highlightTextAtStart]) && highlightTextAtStart > 0)
+        highlightTextAtStart--;
 
-	editor.highlightStart = {highlightTextAtStart + 1, pos.line};
+    while(correctChar(line.text[newCursorTextAt]) && newCursorTextAt < line.len)
+        newCursorTextAt++;
+
+	editor.highlightStart = {highlightTextAtStart + (highlightTextAtStart > 0), pos.line};
 	editor.cursorPos = {newCursorTextAt, pos.line};
 }
 
@@ -1392,9 +1399,11 @@ TimedEvent repeatChar = {0.02f, &AddChar};
 TimedEvent holdAction = {0.5f};
 TimedEvent repeatAction = {0.02f};
 
-bool canDoubleClick = false;
+//TODO: Move multiclicks of this into input
+int numMultiClicks = 0;
 bool doubleClicked = false;
 TimedEvent doubleClick = {0.5f};
+EditorPos prevMousePos = {-1, -1};
 
 bool capslockOn = false;
 bool nonCharKeyPressed = false;
@@ -1561,25 +1570,41 @@ void Draw(float dt)
         if (InputDown(input.leftMouse))
         {
             ClearHighlights();
-            MoveCursorToMouse();
+            editor.cursorPos = GetEditorPosAtMouse();
     
-            if (canDoubleClick && doubleClick.elapsedTime <= doubleClick.interval)
+            if (numMultiClicks > 0 && prevMousePos == editor.cursorPos)
             {
-                HighlightWordAt(editor.cursorPos);
+                //Technically there's a glitch here where if someone clicks more than
+                //INT_MAX - 1 times this will repeat. I don't think it's worth fixing
+                //though as there's no actual reason I can think of where this bug
+                //is problematic
+                switch (numMultiClicks)
+                {
+                    case 1:
+                        HighlightWordAt(editor.cursorPos);
+                        break;
+
+                    case 2:
+                        HighlightCurrentLine();
+                        break;
+
+                    default:
+						Assert(numMultiClicks > 0);
+                        HighlightEntireFile();
+                        break;
+                }
                 doubleClicked = true;
-            }
-            else
-            {
                 doubleClick.elapsedTime = 0.0f;
             }
-            canDoubleClick = doubleClick.elapsedTime == 0.0f;
-            
+            prevMousePos = GetEditorPosAtMouse(); //I don't think this is 100% correct but it works
+            numMultiClicks += doubleClick.elapsedTime <= doubleClick.interval;
         }
 
+        //TODO: Maybe make mouse drag highlight extend from multi click? 
         if (InputHeld(input.leftMouse))
         {
             InitHighlight(editor.cursorPos.textAt, editor.cursorPos.line);
-            if (!doubleClicked) MoveCursorToMouse();
+            if (!doubleClicked) editor.cursorPos = GetEditorPosAtMouse();
         }
 
         if (InputUp(input.leftMouse))
@@ -1634,8 +1659,14 @@ void Draw(float dt)
     if (editor.highlightStart == editor.cursorPos)
         ClearHighlights();
 
-    if (canDoubleClick)
+    if (numMultiClicks)
         doubleClick.elapsedTime += dt;
+    
+    if (doubleClick.elapsedTime >= doubleClick.interval)
+    {
+        numMultiClicks = 0;
+        doubleClick.elapsedTime = 0.0f;
+    }
 
     //Draw Background
     Rect screenDims = {0, screenBuffer.width, 0, screenBuffer.height};
