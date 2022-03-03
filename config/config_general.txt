@@ -1,5 +1,5 @@
-backgroundColour 255,255,255
-textColour 0,0,0
+backgroundColour 68,107,61
+textColour 255,245,177
 lineNumColour 255,0,0
 cursorColour 0,255,0
 highlightColour 0,255,0,83

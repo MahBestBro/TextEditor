@@ -31,11 +31,6 @@ struct ColourRGBA
     byte r, g, b, a;
 };
 
-struct IntPair
-{
-    int x, y;
-};
-
 struct EditorPos
 {
     int textAt;

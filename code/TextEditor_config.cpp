@@ -128,7 +128,7 @@ UserSettings LoadUserSettingsFromConfigFile()
         free(lines[i]);
     free(lines);
 
-    VirtualFree(file, 0, MEM_RELEASE);
+    FreeWin32(file);
 
     return result;
 }

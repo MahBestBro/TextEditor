@@ -7,8 +7,9 @@
 #define local_persist static 
 #define global_variable static
 
-#define Assert(cond) if (!(cond)) {*(int*)0 = 0;}
+#define __Out
 
+#define Assert(cond) if (!(cond)) {*(int*)0 = 0;}
 #define UNIMPLEMENTED(message) Assert(false)
 
 #define Xor(a, b) ( ((a) && !(b)) || (!(a) && (b)) )

@@ -1,0 +1,14 @@
+*.exe
+*.pdb
+*.sln
+*.sln
+*.manifest
+*.obj
+
+/fonts/
+/includes/
+/lib/
+/test_txt_files/
+/config_code_generator/
+/.vs/
+/.vscode/

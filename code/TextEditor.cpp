@@ -925,7 +925,6 @@ void RemoveCurrentLine()
 
     //This needs to happen here so that the above if statement works properly
     editor.numLines -= (editor.numLines != 1);
-    //editor.undoStack[editor.numUndos - 1].end = 
 
     ClearHighlights();
     
