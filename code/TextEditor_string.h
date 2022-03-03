@@ -24,15 +24,15 @@ inline bool IsAlphaNumeric(char c)
     return IsAlphabetical(c) || IsNumeric(c);
 }
 
-//Double check this is correct?
-inline bool IsPunctuation(char c)
-{
-    return !IsAlphaNumeric(c);
-}
-
 inline bool IsInvisChar(char c)
 {
     return c <= ' ';
+}
+
+//Double check this is correct?
+inline bool IsPunctuation(char c)
+{
+    return !IsAlphaNumeric(c) && !IsInvisChar(c);
 }
 
 inline bool IsEmptyString(char* str)
