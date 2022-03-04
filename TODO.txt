@@ -7,7 +7,6 @@ FEATURES:
     - Find and Replace
     - The rest of the default commands (do some research)
     - Mutiple tabs
-    - Have brackets and quotes come in pairs
     - Multiline cursor
     - Customisation for inputs if not too tedious
     - UI?

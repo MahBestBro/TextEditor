@@ -9,6 +9,27 @@ inline int StringLen(const char* string)
     return result;
 }
 
+inline char GetOtherBracket(char bracket)
+{
+    //idk if there's a clever way to do this but I can't figure it out
+    switch(bracket) 
+    {
+        case '(': return ')';
+        case ')': return '(';
+        case '[': return ']';
+        case ']': return '[';
+        case '{': return '}';
+        case '}': return '{';
+        default: 
+        {
+            //NOTE: If you reach here, it means bracket was not a bracket
+            Assert(false);
+            return 0;
+            break;
+        }
+    }
+}
+
 inline bool IsAlphabetical(char c)
 {
     return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');

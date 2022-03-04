@@ -899,7 +899,6 @@ void HighlightWordAt(EditorPos pos)
 
 void AddChar()
 {
-    int numCharsAdded = (editor.currentChar == '\t') ? 4 - editor.cursorPos.textAt % 4 : 1; 
     UndoInfo* currentUndo = &editor.undoStack[editor.numUndos - 1];
 
     Line* line = &editor.lines[editor.cursorPos.line];
@@ -931,27 +930,45 @@ void AddChar()
 		line = &editor.lines[editor.cursorPos.line]; //cursor has moved so get it again
     }
 
-
-    line->len += numCharsAdded;
-    ResizeDynamicArray(&line->text, line->len, sizeof(char), &line->size);
-    //Shift right
-    int offset = 4 * (editor.currentChar == '\t');
-    for (int i = line->len - 1; i > editor.cursorPos.textAt + offset - 1; --i)
-        line->text[i] = line->text[i - numCharsAdded];
-    
-    //Add character(s) and advance cursor
-    char c = (editor.currentChar == '\t') ? ' ' : editor.currentChar;
-    line->text[editor.cursorPos.textAt] = c;
-	line->text[line->len] = 0;
-    editor.cursorPos.textAt++;
-    if (editor.currentChar == '\t')
+    int numCharsAdded = 0; 
+    char textToInsert[5]; //this'll likely never need to be greater than 5
+    switch(editor.currentChar)
     {
-        for (int _ = 0; _ < numCharsAdded - 1; ++_)
+        case '\t':
         {
-            line->text[editor.cursorPos.textAt] = c;
-            editor.cursorPos.textAt++;
-        }
+            numCharsAdded = 4 - editor.cursorPos.textAt % 4;
+            for (int i = 0; i < numCharsAdded; ++i)
+                textToInsert[i] = ' ';
+        } break;
+
+        case '{':
+        case '[':
+        case '(':
+        {
+            numCharsAdded = 2;
+            textToInsert[0] = editor.currentChar;
+            textToInsert[1] = GetOtherBracket(editor.currentChar);
+        } break;
+
+        case '\'':
+        case '"':
+        {
+            numCharsAdded = 2;
+            textToInsert[0] = editor.currentChar;
+            textToInsert[1] = editor.currentChar;
+        } break;
+
+        default:
+        {
+            numCharsAdded = 1;
+            textToInsert[0] = editor.currentChar;
+        } break;
     }
+    Assert(numCharsAdded > 0);
+    textToInsert[numCharsAdded] = 0;
+    InsertTextInLine(editor.cursorPos.line, textToInsert, editor.cursorPos.textAt);
+
+    editor.cursorPos.textAt += (editor.currentChar == '\t') ? numCharsAdded : 1;
 
     editor.undoStack[editor.numUndos - 1].end = editor.cursorPos;
 
