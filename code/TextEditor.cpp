@@ -4,6 +4,7 @@
 #include "TextEditor_input.h"
 #include "TextEditor_string.h"
 #include "TextEditor_config.h"
+#include "TextEditor_tokeniser.h"
 
 #define TEXT_X_OFFSET 52
 #define CURSOR_HEIGHT 18
@@ -255,15 +256,18 @@ void Draw8bppPixels(Rect rect, byte* pixels, int stride, Colour colour, Rect lim
     }
 }
 
-//Consider making this non c-string dependent
-//TE because DrawText already in windows.h hnnnngh
-void DrawText(char* text, int xCoord, int yCoord, Colour colour, Rect limits = {0})
+//TODO: Make this non c-string dependent
+void DrawText(char* text, int xCoord, int yCoord, Colour colour, Rect limits = {0}, int textLen = -1)
 {
     char* at = text; 
 	int xAdvance = 0;
     int yAdvance = 0;
+
+    int numAdvances = 0;
     for (; at[0]; at++)
     {
+        if (numAdvances == textLen) break;
+
         FontChar fc = fontChars[at[0]];
         int xOffset = fc.left + xAdvance + xCoord;
         int yOffset = yCoord - (fc.height - fc.top) - yAdvance;
@@ -272,6 +276,8 @@ void DrawText(char* text, int xCoord, int yCoord, Colour colour, Rect limits = {
         Draw8bppPixels(charDims, (byte*)fc.pixels, fc.width, colour, limits);
 
 		xAdvance += fc.advance;
+
+        numAdvances++;
     }
 }
 
@@ -306,7 +312,7 @@ void AdvanceCursorToEndOfWord(bool forward)
     do 
     {
         editor.cursorPos.textAt += (forward) ? 1 : -1;
-        if (!IsInvisChar(line.text[editor.cursorPos.textAt - !forward]))
+        if (!IsWhiteSpace(line.text[editor.cursorPos.textAt - !forward]))
             skipOverSpace = false;
         
         if (!skipOverSpace)
@@ -880,7 +886,7 @@ void HighlightWordAt(EditorPos pos)
 
     bool (*correctChar)(char) = IsPunctuation; 
     if (IsAlphaNumeric(startingChar)) correctChar = IsAlphaNumeric;
-    else if (IsInvisChar(startingChar)) correctChar = IsInvisChar;
+    else if (IsWhiteSpace(startingChar)) correctChar = IsWhiteSpace;
 
     while (correctChar(line.text[highlightTextAtStart]) && highlightTextAtStart > 0)
         highlightTextAtStart--;
@@ -1558,7 +1564,7 @@ void Draw(float dt)
         };
 
         bool inputHeld = false;
-        for (int i = 0; i < ArrayLen(inputFlags); ++i)
+        for (int i = 0; i < StackArrayLen(inputFlags); ++i)
         {
             if (InputDown(inputFlags[i]))
             {
@@ -1684,7 +1690,7 @@ void Draw(float dt)
                 Undo
             };
 
-            for (int i = 0; i < ArrayLen(keyCommands); ++i)
+            for (int i = 0; i < StackArrayLen(keyCommands); ++i)
             {
                 if (KeyCommandDown(keyCommands[i]))
                 {
@@ -1751,7 +1757,58 @@ void Draw(float dt)
         //Draw text
         int x = start.x - editor.textOffset.x;
         int y = start.y - i * CURSOR_HEIGHT + editor.textOffset.y;
-        DrawText(editor.lines[i].text, x, y, userSettings.textColour, textBounds);
+        TokenInfo tokenInfo = TokeniseLine(editor.lines[i]);
+        int textOffset = 0;
+        for (int t = 0; t < tokenInfo.numTokens - 1; ++t)
+        {
+            Colour textColour = userSettings.textColour;
+            Token token = tokenInfo.tokens[t];
+            Token nextToken = tokenInfo.tokens[t + 1];
+            //TODO: Replace this with table lookup once text files come into the equation
+            switch(tokenInfo.tokens[t].type)
+            {
+                case TOKEN_IDENTIFIER:
+                case TOKEN_UNKNOWN:
+                case TOKEN_PUNCTUATION:
+                break;
+
+                case TOKEN_KEYWORD:
+                case TOKEN_OPERATOR:
+                case TOKEN_PREPROCESSOR_TAG:
+                {
+                    textColour = {255, 0, 0};
+                } break;
+
+                case TOKEN_NUMBER:
+                case TOKEN_BOOL:
+                {
+                    textColour = {179, 124, 225};
+                } break;
+                
+                case TOKEN_CUSTOM_TYPE:
+                case TOKEN_DEFINE:
+                {
+                    textColour = {25, 0, 255};
+                } break;
+
+                case TOKEN_INBUILT_TYPE:
+                {
+                    textColour = {0, 255, 255};
+                } break;
+
+                case TOKEN_STRING:
+                {
+                    textColour = {255, 255, 0};
+                } break;
+            }
+
+            char* text = editor.lines[i].text + token.textAt - textOffset;
+            DrawText(text, x, y, textColour, textBounds, token.textLength + textOffset);
+            x += TextPixelLength(text, token.textLength + textOffset);
+            textOffset = nextToken.textAt - token.textLength;
+        }
+            
+        free(tokenInfo.tokens);
 
         //Draw Line num
         char lineNumText[8];

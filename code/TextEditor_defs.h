@@ -14,7 +14,7 @@
 
 #define Xor(a, b) ( ((a) && !(b)) || (!(a) && (b)) )
 
-#define ArrayLen(arr) (sizeof((arr)) / sizeof((arr)[0]))
+#define StackArrayLen(arr) (sizeof((arr)) / sizeof((arr)[0]))
 
 #define Clamp(x, lo, hi) (max(min((x), (hi)), (lo)))
 #define InRange(x, lo, hi) ((x) >= (lo) && (x) <= (hi))

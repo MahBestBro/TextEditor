@@ -45,7 +45,7 @@ inline bool IsAlphaNumeric(char c)
     return IsAlphabetical(c) || IsNumeric(c);
 }
 
-inline bool IsInvisChar(char c)
+inline bool IsWhiteSpace(char c)
 {
     return c <= ' ';
 }
@@ -53,7 +53,7 @@ inline bool IsInvisChar(char c)
 //Double check this is correct?
 inline bool IsPunctuation(char c)
 {
-    return !IsAlphaNumeric(c) && !IsInvisChar(c);
+    return !IsAlphaNumeric(c) && !IsWhiteSpace(c);
 }
 
 inline bool IsEmptyString(char* str)

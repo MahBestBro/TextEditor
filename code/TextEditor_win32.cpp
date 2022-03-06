@@ -16,11 +16,13 @@
 #include "TextEditor.h"
 #include "TextEditor_string.h"
 #include "TextEditor_config.h"
+#include "TextEditor_tokeniser.h"
 
 #include "TextEditor_input.cpp"
 #include "TextEditor.cpp"
 #include "TextEditor_string.cpp"
 #include "TextEditor_config.cpp"
+#include "TextEditor_tokeniser.cpp"
 
 Input input = {};
 FontChar fontChars[128];

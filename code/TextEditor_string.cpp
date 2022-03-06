@@ -128,3 +128,14 @@ char* ReverseString(char* str, int len)
     result[len] = 0;
     return result;
 }
+
+bool CompareStrings(char* a, int aLen, char* b, int bLen)
+{
+    if (aLen != bLen) return false;
+
+    for (int i = 0; i < aLen; ++i)
+    {
+        if (a[i] != b[i]) return false;
+    }
+    return true;
+}
