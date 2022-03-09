@@ -1758,18 +1758,18 @@ void Draw(float dt)
         int x = start.x - editor.textOffset.x;
         int y = start.y - i * CURSOR_HEIGHT + editor.textOffset.y;
         TokenInfo tokenInfo = TokeniseLine(editor.lines[i]);
-        int textOffset = 0;
-        for (int t = 0; t < tokenInfo.numTokens - 1; ++t)
+        //int textOffset = 0;
+        for (int t = 0; t < tokenInfo.numTokens; ++t)
         {
             Colour textColour = userSettings.textColour;
             Token token = tokenInfo.tokens[t];
-            Token nextToken = tokenInfo.tokens[t + 1];
             //TODO: Replace this with table lookup once text files come into the equation
             switch(tokenInfo.tokens[t].type)
             {
                 case TOKEN_IDENTIFIER:
                 case TOKEN_UNKNOWN:
                 case TOKEN_PUNCTUATION:
+                case TOKEN_EOS:
                 break;
 
                 case TOKEN_KEYWORD:
@@ -1802,10 +1802,17 @@ void Draw(float dt)
                 } break;
             }
 
-            char* text = editor.lines[i].text + token.textAt - textOffset;
-            DrawText(text, x, y, textColour, textBounds, token.textLength + textOffset);
-            x += TextPixelLength(text, token.textLength + textOffset);
-            textOffset = nextToken.textAt - token.textLength;
+            char* text = editor.lines[i].text + token.textAt;
+            DrawText(text, x, y, textColour, textBounds, token.textLength);
+            x += TextPixelLength(text, token.textLength);
+            if (t < tokenInfo.numTokens - 1)
+            {
+                text += token.textLength;
+                int remainderLength = tokenInfo.tokens[t + 1].textAt - token.textAt - token.textLength;
+                DrawText(text, x, y, textColour, textBounds, remainderLength);
+                x += TextPixelLength(text, remainderLength);
+            }
+            
         }
             
         free(tokenInfo.tokens);
