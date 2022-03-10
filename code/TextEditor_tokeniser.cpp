@@ -31,14 +31,7 @@ bool IsInStringArray(char* str, int len, char** stringArr, int arrLen)
     return false;
 }
 
-enum MultilineState
-{
-    MS_NON_MULTILINE,
-    MS_STRING,
-    MS_COMMENT
-};
-
-Token GetTokenFromLine(Line code, int* at, MultilineState ms)
+Token GetTokenFromLine(Line code, int* at, MultilineState* ms)
 {
     //EatWhitespaceAndComments(tokeniser);
 	int _at = *at;
@@ -89,18 +82,19 @@ Token GetTokenFromLine(Line code, int* at, MultilineState ms)
         return token;
 	}
 
-    switch(ms)
+    switch(*ms)
     {
         case MS_COMMENT:
         {
-            Assert(_at == 0);
-
             token.type = TOKEN_COMMENT;
             _at++;
             while(_at < code.len)
             {
                 if (code.text[_at] == '/' && code.text[_at - 1] == '*')
+                {
+                    *ms = MS_NON_MULTILINE;
                     break;
+                }
 
                 _at++;
             } 
@@ -110,13 +104,14 @@ Token GetTokenFromLine(Line code, int* at, MultilineState ms)
 
         case MS_STRING: 
         {
-            Assert(_at == 0);
-
             token.type = TOKEN_STRING;
             while(_at < code.len)
             {
                 if (code.text[_at] == '"')
+                {
+                    *ms = MS_NON_MULTILINE;
                     break;
+                }
                 _at++;
             } 
 
@@ -151,7 +146,6 @@ Token GetTokenFromLine(Line code, int* at, MultilineState ms)
  
         case '+': 
         case '*': 
-        case '/': 
         case '%': 
         case '=':  
         case '&': 
@@ -181,6 +175,20 @@ Token GetTokenFromLine(Line code, int* at, MultilineState ms)
         {
             //NOTE: Don't need to check for arrow operator because the above skips over the > if it is an arrow operator
             token.type = TOKEN_OPERATOR;
+        } break;
+
+        case '/':
+        {
+            token.type = TOKEN_OPERATOR;
+            if (code.text[_at] == '/' || code.text[_at] == '*')
+            {
+				if (code.text[_at] == '*')
+					*ms = MS_COMMENT;
+
+                token.type = TOKEN_COMMENT;
+				token.textLength = code.len;
+                _at = code.len;   
+            }
         } break;
 
         case '<':
@@ -217,8 +225,13 @@ Token GetTokenFromLine(Line code, int* at, MultilineState ms)
                 ++token.textLength;
                 ++_at;    
             }
+			else
+			{
+				*ms = MS_STRING;
+			}
         } break;
 
+        //TODO: This doesn't work, fix it
         case '#':
         {
             int start = _at;
@@ -365,7 +378,7 @@ Token GetTokenFromLine(Line code, int* at, MultilineState ms)
     return token;
 }
 
-TokenInfo TokeniseLine(Line code)
+TokenInfo TokeniseLine(Line code, MultilineState* multilineState)
 {
     //The number of tokens in a line should not exceed that line's length 
     TokenInfo result = {};
@@ -373,22 +386,12 @@ TokenInfo TokeniseLine(Line code)
     result.tokens = HeapAlloc(Token, code.len); 
 
     int at = 0;
-    MultilineState multilineState = MS_NON_MULTILINE;
     bool parsing = true;
     while (parsing)
     {
         Token token = GetTokenFromLine(code, &at, multilineState);
         result.tokens[result.numTokens++] = token;
-        if (at == code.len)
-        {
-            switch (token.type)
-            {
-                case TOKEN_COMMENT: multilineState = MS_COMMENT; break;
-                case TOKEN_STRING: multilineState = MS_STRING; break;
-                default: break; 
-            }
-            parsing = false;
-        }   
+        parsing = (at != code.len);
     }
 
     return result;

@@ -23,6 +23,13 @@ enum TypeOfToken
     TOKEN_UNKNOWN
 };
 
+enum MultilineState
+{
+    MS_NON_MULTILINE,
+    MS_STRING,
+    MS_COMMENT
+};
+
 struct Token
 {
     int textAt;
@@ -49,6 +56,6 @@ struct StringContainer
     int count;
 };
 
-TokenInfo TokeniseLine(Line code);
+TokenInfo TokeniseLine(Line code, MultilineState* multilineState);
 
 #endif

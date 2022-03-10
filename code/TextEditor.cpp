@@ -584,17 +584,17 @@ void InsertTextInLine(int lineIndex, char* text, int textStart)
 {
     size_t textLen = StringLen(text);
 
+    int prevLineLen = editor.lines[lineIndex].len;
     editor.lines[lineIndex].len += (int)textLen;
     ResizeDynamicArray(&editor.lines[lineIndex].text,
                        editor.lines[lineIndex].len, 
                        sizeof(char), 
                        &editor.lines[lineIndex].size);
     
-    int spaceLeft = editor.lines[lineIndex].size - editor.lines[lineIndex].len;
-	int numToMove = min(editor.lines[lineIndex].len - textStart, spaceLeft);
-    memmove(editor.lines[lineIndex].text + textStart + textLen, 
+    int destOffset = editor.lines[lineIndex].len - prevLineLen + textStart;
+    memmove(editor.lines[lineIndex].text + destOffset, 
             editor.lines[lineIndex].text + textStart, 
-			numToMove);
+			prevLineLen - textStart);
     memcpy(editor.lines[lineIndex].text + textStart, text, textLen);
     
     editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
@@ -956,6 +956,7 @@ void AddChar()
             textToInsert[1] = GetOtherBracket(editor.currentChar);
         } break;
 
+        //TODO: Have ' only add one char if in comment
         case '\'':
         case '"':
         {
@@ -1535,8 +1536,7 @@ void Draw(float dt)
             holdChar.elapsedTime = 0.0f;
         HandleTimedEvent(&holdChar, dt, &repeatChar);
 
-        if (!InputHeld(input.leftShift))
-            ClearHighlights();
+        ClearHighlights();
     }
     else
     {
@@ -1752,12 +1752,13 @@ void Draw(float dt)
 
     Rect textBounds = {start.x, xRightLimit, yBottomLimit, 0};
 
+    MultilineState multilineState = MS_NON_MULTILINE;
     for (int i = 0; i < editor.numLines; ++i)
     {
         //Draw text
         int x = start.x - editor.textOffset.x;
         int y = start.y - i * CURSOR_HEIGHT + editor.textOffset.y;
-        TokenInfo tokenInfo = TokeniseLine(editor.lines[i]);
+        TokenInfo tokenInfo = TokeniseLine(editor.lines[i], &multilineState);
         //int textOffset = 0;
         for (int t = 0; t < tokenInfo.numTokens; ++t)
         {
@@ -1800,11 +1801,26 @@ void Draw(float dt)
                 {
                     textColour = {255, 255, 0};
                 } break;
+
+                case TOKEN_COMMENT:
+                {
+                    textColour = {180, 180, 180};
+                } break;
             }
 
+            //Draw whitespace before first token
+            if (t == 0)
+            {
+                DrawText(editor.lines[i].text, x, y, textColour, textBounds, token.textAt);
+                x += TextPixelLength(editor.lines[i].text, token.textAt);
+            }
+
+            //Draw token
             char* text = editor.lines[i].text + token.textAt;
             DrawText(text, x, y, textColour, textBounds, token.textLength);
             x += TextPixelLength(text, token.textLength);
+
+            //Draw whitespace
             if (t < tokenInfo.numTokens - 1)
             {
                 text += token.textLength;
