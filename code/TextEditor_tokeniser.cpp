@@ -2,9 +2,10 @@
 #include "TextEditor.h"
 #include "TextEditor_string.h"
 #include "TextEditor_tokeniser.h"
+#include "TextEditor_string_hash_set.h"
 
-StringContainer types = {};
-StringContainer defines = {};
+StringHashSet types = InitHashSet();
+StringHashSet defines = InitHashSet();
 
 bool IsNumber(char* str, int len)
 {
@@ -126,6 +127,8 @@ Token GetTokenFromLine(Line code, int* at, MultilineState* ms)
     char c = code.text[_at];
     ++_at;
 
+    //if (*wantType)
+
     switch(c)
     {
         case '\0': 
@@ -239,27 +242,27 @@ Token GetTokenFromLine(Line code, int* at, MultilineState* ms)
             {
                 ++_at;
             }
-            token.textLength = _at - start;
+            token.textLength += _at - start;
 
             if (IsInStringArray(code.text + token.textAt, token.textLength, 
                 preprocessorTags, StackArrayLen(preprocessorTags)))
             {
                 token.type = TOKEN_PREPROCESSOR_TAG;
+
                 
                 if (CompareStrings(code.text + token.textAt, token.textLength, "#define", 7))
                 {
                     //Get what's actually defined
                     int defStart = _at;
-					while (IsWhiteSpace(code.text[defStart])) ++defStart;
+					while (defStart < code.len && IsWhiteSpace(code.text[defStart])) ++defStart;
 
                     int defEnd = defStart;
-                    while (!IsWhiteSpace(code.text[defEnd])) ++defEnd;
+                    while (defStart < code.len && !IsWhiteSpace(code.text[defEnd])) ++defEnd;
                     int defLen = defEnd - defStart;
 
-                    defines.strings[defines.count] = HeapAlloc(char, defLen + 1);
-                    memcpy(defines.strings[defines.count], code.text + defStart, defLen + 1);
-                    defines.strings[defines.count][defLen] = 0;
-                    defines.count++;
+                    //TODO: Handle removing from hashset when name changes (will likely require new struct)
+					if (defLen > 0)
+						AddToHashSet(&defines, code.text + defStart, defLen);
                 }
             }
             else
@@ -327,28 +330,27 @@ Token GetTokenFromLine(Line code, int* at, MultilineState* ms)
                     token.type = TOKEN_INBUILT_TYPE;
                     
                     //If a struct or enum, add the type
+                    //TODO: make like a boolean to know that the next token is meant to be a custom type and move this into that section
                     if (CompareStrings(tokenStr, token.textLength, "struct", 6) ||
                         CompareStrings(tokenStr, token.textLength, "enum", 4))
                     {
                         int typeStart = _at;
-                        while (IsWhiteSpace(code.text[typeStart])) ++typeStart;
+                        while (typeStart < code.len && IsWhiteSpace(code.text[typeStart])) ++typeStart;
 
-                        int typeEnd = start;
-                        while (!IsWhiteSpace(code.text[typeEnd])) ++typeEnd;
+                        int typeEnd = typeStart;
+                        while (typeStart < code.len && !IsWhiteSpace(code.text[typeEnd])) ++typeEnd;
                         int typeLen = typeEnd - typeStart;
 
-                        //Add type to types
-                        types.strings[types.count] = HeapAlloc(char, typeLen + 1);
-                        memcpy(types.strings[types.count], code.text + typeStart, typeLen + 1);
-                        types.strings[types.count][typeLen] = 0;
-                        types.count++;
+                        //TODO: Handle removing from hashset when name changes (will likely require new struct)
+						if (typeLen > 0)
+							AddToHashSet(&types, code.text + typeStart, typeLen);
                     }
                 }
-                else if (IsInStringArray(tokenStr, token.textLength, defines.strings, defines.count))
+                else if (IsInHashSet(&defines, tokenStr, token.textLength))
                 {
                     token.type = TOKEN_DEFINE;
                 }
-                else if (IsInStringArray(tokenStr, token.textLength, types.strings, types.count))
+                else if (IsInHashSet(&types, tokenStr, token.textLength))
                 {
                     token.type = TOKEN_CUSTOM_TYPE;
                 }

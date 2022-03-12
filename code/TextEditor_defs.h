@@ -21,6 +21,7 @@
 
 //#define HeapAlloc(type, numEls) (type*)dbg_malloc((numEls) * sizeof(type), __FILE__, __LINE__)
 #define HeapAlloc(type, numEls) (type*)malloc((numEls) * sizeof(type))
+#define HeapAllocZero(type, numEls) (type*)calloc((numEls), sizeof(type))
 #define HeapRealloc(type, arr, numEls) (type*)realloc(arr, (numEls) * sizeof(type))
 
 #define PIXEL_IN_BYTES 4
