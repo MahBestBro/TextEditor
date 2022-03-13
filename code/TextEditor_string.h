@@ -9,8 +9,25 @@ inline int StringLen(const char* string)
     return result;
 }
 
+inline bool IsForwardsBracket(char c)
+{
+    return c == '(' || c == '[' || c == '{';
+}
+
+inline bool IsBackwardsBracket(char c)
+{
+    return c == ')' || c == ']' || c == '}';
+}
+
+inline bool IsBracket(char c)
+{
+    return IsForwardsBracket(c) ||IsBackwardsBracket(c);
+}
+
 inline char GetOtherBracket(char bracket)
 {
+    Assert(IsBracket(bracket));
+
     //idk if there's a clever way to do this but I can't figure it out
     switch(bracket) 
     {
@@ -22,7 +39,7 @@ inline char GetOtherBracket(char bracket)
         case '}': return '{';
         default: 
         {
-            //NOTE: If you reach here, it means bracket was not a bracket
+            //NOTE: This is unreachable
             Assert(false);
             return 0;
             break;

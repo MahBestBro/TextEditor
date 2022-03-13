@@ -56,6 +56,7 @@ struct StringContainer
     int count;
 };
 
-TokenInfo TokeniseLine(Line code, MultilineState* multilineState);
+void InitTokeniserStuff();
+TokenInfo TokeniseLine(Line code, int lineIndex, MultilineState* multilineState);
 
 #endif

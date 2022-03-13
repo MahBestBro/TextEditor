@@ -902,17 +902,25 @@ void HighlightWordAt(EditorPos pos)
 //KEY-MAPPED FUNCTIONS
 //
 
-
 void AddChar()
 {
+    Line* line = &editor.lines[editor.cursorPos.line];
+    char charAtCursor = line->text[editor.cursorPos.textAt];
+    char prevChar = line->text[editor.cursorPos.textAt - 1];
+
+    //TODO: This won't allow typing backwards brackets inside brackets, fix this by tracking prev input code
+    if (IsBackwardsBracket(editor.currentChar) && IsBackwardsBracket(charAtCursor) && 
+        IsForwardsBracket(prevChar))
+    {
+        editor.cursorPos.textAt++;
+        return;
+    }
+
     UndoInfo* currentUndo = &editor.undoStack[editor.numUndos - 1];
 
-    Line* line = &editor.lines[editor.cursorPos.line];
-
-    char lastTypedChar = line->text[editor.cursorPos.textAt - 1];
-    char secondLastTypedChar = line->text[editor.cursorPos.textAt - 2];
-    bool startOfNewWord = (editor.currentChar == ' ' && lastTypedChar != ' ') || 
-        (editor.currentChar != ' ' && lastTypedChar == ' ' && secondLastTypedChar == ' ');
+    char prevPrevChar = line->text[editor.cursorPos.textAt - 2];
+    bool startOfNewWord = (editor.currentChar == ' ' && prevChar != ' ') || 
+        (editor.currentChar != ' ' && prevChar == ' ' && prevPrevChar == ' ');
 
     if (startOfNewWord || editor.currentChar == '\t' || currentUndo->type != UNDOTYPE_ADDED_TEXT || 
         line->len == 0 || editor.highlightStart.textAt != -1 || 
@@ -1465,6 +1473,8 @@ void Init()
     }
 
     userSettings = LoadUserSettingsFromConfigFile();
+
+    InitTokeniserStuff();
 }
 
 void Draw(float dt)
@@ -1758,7 +1768,7 @@ void Draw(float dt)
         //Draw text
         int x = start.x - editor.textOffset.x;
         int y = start.y - i * CURSOR_HEIGHT + editor.textOffset.y;
-        TokenInfo tokenInfo = TokeniseLine(editor.lines[i], &multilineState);
+        TokenInfo tokenInfo = TokeniseLine(editor.lines[i], i, &multilineState);
         //int textOffset = 0;
         for (int t = 0; t < tokenInfo.numTokens; ++t)
         {

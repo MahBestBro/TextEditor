@@ -2,10 +2,146 @@
 #include "TextEditor.h"
 #include "TextEditor_string.h"
 #include "TextEditor_tokeniser.h"
-#include "TextEditor_string_hash_set.h"
+//#include "TextEditor_string_hash_set.h"
 
-StringHashSet types = InitHashSet();
-StringHashSet defines = InitHashSet();
+#define INITIAL_HASHSET_SIZE 131
+#define HASHSET_BASE 31
+
+struct DefinedToken
+{
+    char* name = nullptr;
+    int nameLen = 0;
+    int line = -1;
+};
+
+struct DefinedTokenHashSet
+{
+    DefinedToken* vals;
+    int size = INITIAL_HASHSET_SIZE;
+    int numVals = 0;
+};
+
+DefinedTokenHashSet InitHashSet()
+{
+    DefinedTokenHashSet result;
+    result.vals = HeapAlloc(DefinedToken, INITIAL_HASHSET_SIZE);
+    for (int i = 0; i < INITIAL_HASHSET_SIZE; ++i)
+        result.vals[i] = {};
+    return result;
+}
+
+int Hash(int hashSetSize, DefinedToken val)
+{
+    int hash = 0;
+    for (int i = 0; i < val.nameLen; ++i)
+        hash = (hash * HASHSET_BASE + val.name[i]) % hashSetSize;
+    return hash;
+}
+
+//Returns either index of val if in the hashset, else the index of a free slot in the hash set
+int LinearProbe(DefinedTokenHashSet* hashSet, DefinedToken val)
+{
+    int hash = Hash(hashSet->size, val);
+    for (int i = 0; i < hashSet->size; ++i)
+    {
+        int index = (hash + i) % hashSet->size;
+        DefinedToken currentVal = hashSet->vals[index];
+		if (!currentVal.name || CompareStrings(currentVal.name, currentVal.nameLen, 
+                                               val.name, val.nameLen))
+		{
+			//if (i > 0)
+			//	printf("Clash at index %i. Moved to index %i\n", hash, index);
+			//else
+			//	printf("String added at index %i\n", index);
+			return index;
+		}
+    }
+
+    Assert(false); //You shouldn't have gotten here
+    return -1;
+}
+
+bool IsInHashSet(DefinedTokenHashSet* hashSet, DefinedToken val)
+{
+    int index = LinearProbe(hashSet, val);
+    return hashSet->vals[index].name != nullptr; 
+}
+
+//TODO: Realloc and rehashing
+void AddToHashSet(DefinedTokenHashSet* hashSet, DefinedToken val)
+{
+    int index = LinearProbe(hashSet, val);
+    if (!hashSet->vals[index].name)
+    {
+        hashSet->vals[index] = val;
+        hashSet->numVals++;
+    }
+}
+
+void RemoveFromHashSet(DefinedTokenHashSet* hashSet, DefinedToken val)
+{
+    int index = LinearProbe(hashSet, val);
+    if (hashSet->vals[index].name)
+    {
+        free(hashSet->vals[index].name);
+		hashSet->vals[index].name = nullptr;
+        hashSet->vals[index].nameLen = 0;
+        hashSet->vals[index].line = -1;
+        hashSet->numVals--;
+
+        index = (index + 1) % hashSet->size;
+        while (hashSet->vals[index].name)
+        {
+            DefinedToken _val = hashSet->vals[index];
+            hashSet->vals[index].name = nullptr;
+            hashSet->vals[index].nameLen = 0;
+            hashSet->vals[index].line = -1;
+            int newIndex = LinearProbe(hashSet, _val);
+            hashSet->vals[newIndex] = _val;
+            index = (index + 1) % hashSet->size;
+        }        
+    }
+}
+
+void RemoveFromHashSet(DefinedTokenHashSet* hashSet, int position)
+{
+    int index = position;
+    if (hashSet->vals[index].name)
+    {
+        free(hashSet->vals[index].name);
+		hashSet->vals[index].name = nullptr;
+        hashSet->vals[index].nameLen = 0;
+        hashSet->vals[index].line = -1;
+        hashSet->numVals--;
+
+        index = (index + 1) % hashSet->size;
+        while (hashSet->vals[index].name)
+        {
+            DefinedToken _val = hashSet->vals[index];
+            hashSet->vals[index].name = nullptr;
+            hashSet->vals[index].nameLen = 0;
+            hashSet->vals[index].line = -1;
+            int newIndex = LinearProbe(hashSet, _val);
+            hashSet->vals[newIndex] = _val;
+            index = (index + 1) % hashSet->size;
+        }        
+    }
+}
+
+DefinedTokenHashSet types = InitHashSet();
+int typesLineToHashTable[INITIAL_HASHSET_SIZE];
+
+DefinedTokenHashSet defines = InitHashSet();
+int definesLineToHashTable[INITIAL_HASHSET_SIZE];
+
+void InitTokeniserStuff()
+{
+    for (int i = 0; i < INITIAL_HASHSET_SIZE; ++i)
+    {
+        typesLineToHashTable[i] = -1;
+        definesLineToHashTable[i] = -1;
+    }
+}
 
 bool IsNumber(char* str, int len)
 {
@@ -32,7 +168,7 @@ bool IsInStringArray(char* str, int len, char** stringArr, int arrLen)
     return false;
 }
 
-Token GetTokenFromLine(Line code, int* at, MultilineState* ms)
+Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
 {
     //EatWhitespaceAndComments(tokeniser);
 	int _at = *at;
@@ -262,7 +398,24 @@ Token GetTokenFromLine(Line code, int* at, MultilineState* ms)
 
                     //TODO: Handle removing from hashset when name changes (will likely require new struct)
 					if (defLen > 0)
-						AddToHashSet(&defines, code.text + defStart, defLen);
+                    {
+                        if (definesLineToHashTable[lineIndex] != -1)
+                        {
+                            //TODO: Only realloc when not enough space
+                            DefinedToken* defToken = &defines.vals[definesLineToHashTable[lineIndex]];
+                            defToken->name = HeapRealloc(char, defToken->name, token.textLength);
+                            memcpy(defToken->name, code.text + defStart, defLen);
+                            defToken->nameLen = defLen;
+                        }
+                        else
+                        {
+                            DefinedToken val = {nullptr, defLen, lineIndex};
+                            val.name = HeapAlloc(char, defLen);
+                            memcpy(val.name, code.text + defStart, defLen);
+						    AddToHashSet(&defines, val);
+                            definesLineToHashTable[lineIndex] = LinearProbe(&defines, val);
+                        }
+                    }
                 }
             }
             else
@@ -342,22 +495,45 @@ Token GetTokenFromLine(Line code, int* at, MultilineState* ms)
                         int typeLen = typeEnd - typeStart;
 
                         //TODO: Handle removing from hashset when name changes (will likely require new struct)
-						if (typeLen > 0)
-							AddToHashSet(&types, code.text + typeStart, typeLen);
+                        if (typeLen > 0)
+                        {
+                            if (typesLineToHashTable[lineIndex] != -1)
+                            {
+                                //TODO: Only realloc when not enough space
+                                DefinedToken* typeToken = &types.vals[typesLineToHashTable[lineIndex]];
+                                typeToken->name = HeapRealloc(char, typeToken->name, token.textLength);
+                                memcpy(typeToken->name, code.text + typeStart, typeLen);
+                                typeToken->nameLen = typeLen;
+                            }
+                            else
+                            {
+                                DefinedToken val = {nullptr, typeLen, lineIndex};
+                                val.name = HeapAlloc(char, typeLen);
+                                memcpy(val.name, code.text + typeStart, typeLen);
+					    	    AddToHashSet(&types, val);
+                                typesLineToHashTable[lineIndex] = LinearProbe(&types, val);
+                            }
+                        }
                     }
-                }
-                else if (IsInHashSet(&defines, tokenStr, token.textLength))
-                {
-                    token.type = TOKEN_DEFINE;
-                }
-                else if (IsInHashSet(&types, tokenStr, token.textLength))
-                {
-                    token.type = TOKEN_CUSTOM_TYPE;
                 }
                 else if (IsBool(tokenStr, token.textLength))
                 {
                     token.type = TOKEN_BOOL;
                 }
+                else
+                {
+                    DefinedToken definedToken = {nullptr, token.textLength, -1};
+                    definedToken.name = HeapAlloc(char, token.textLength);
+                    memcpy(definedToken.name, tokenStr, token.textLength);
+
+                    if (IsInHashSet(&defines, definedToken))
+                        token.type = TOKEN_DEFINE;
+                    else if (IsInHashSet(&types, definedToken))
+                        token.type = TOKEN_CUSTOM_TYPE;
+                    else
+                        free(definedToken.name);
+                } 
+                
             }
             else if (IsNumeric(c))
             {
@@ -380,7 +556,8 @@ Token GetTokenFromLine(Line code, int* at, MultilineState* ms)
     return token;
 }
 
-TokenInfo TokeniseLine(Line code, MultilineState* multilineState)
+//Maybe make editor variable global across files so that we only need to pass index?
+TokenInfo TokeniseLine(Line code, int lineIndex, MultilineState* multilineState)
 {
     //The number of tokens in a line should not exceed that line's length 
     TokenInfo result = {};
@@ -391,7 +568,7 @@ TokenInfo TokeniseLine(Line code, MultilineState* multilineState)
     bool parsing = true;
     while (parsing)
     {
-        Token token = GetTokenFromLine(code, &at, multilineState);
+        Token token = GetTokenFromLine(code, lineIndex, &at, multilineState);
         result.tokens[result.numTokens++] = token;
         parsing = (at != code.len);
     }
