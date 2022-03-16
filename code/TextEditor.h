@@ -132,7 +132,6 @@ inline void ResizeDynamicArray(void* ptrToArr, int len, size_t elSize, int* size
     }
 }
 
-
 void Init();
 void Draw(float dt);
 void Print(const char* message);

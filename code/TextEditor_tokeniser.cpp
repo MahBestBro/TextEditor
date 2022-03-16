@@ -2,145 +2,30 @@
 #include "TextEditor.h"
 #include "TextEditor_string.h"
 #include "TextEditor_tokeniser.h"
-//#include "TextEditor_string_hash_set.h"
 
-#define INITIAL_HASHSET_SIZE 131
-#define HASHSET_BASE 31
+#define INITIAL_TYPEDEFS_SIZE 64
 
-struct DefinedToken
+struct LineView
 {
-    char* name = nullptr;
-    int nameLen = 0;
-    int line = -1;
+    int lineIndex;
+    int textAt;
+    int textLen;
 };
 
-struct DefinedTokenHashSet
+extern Editor editor;
+
+//DefinedTokenHashSet types = InitHashSet();
+internal LineView typedefs[INITIAL_TYPEDEFS_SIZE];
+internal int numTypedefs = 0;
+
+//DefinedTokenHashSet defines = InitHashSet();
+internal LineView poundDefines[INITIAL_TYPEDEFS_SIZE];
+internal int numPoundDefines = 0;
+
+void ResetTypeAndDefTokens()
 {
-    DefinedToken* vals;
-    int size = INITIAL_HASHSET_SIZE;
-    int numVals = 0;
-};
-
-DefinedTokenHashSet InitHashSet()
-{
-    DefinedTokenHashSet result;
-    result.vals = HeapAlloc(DefinedToken, INITIAL_HASHSET_SIZE);
-    for (int i = 0; i < INITIAL_HASHSET_SIZE; ++i)
-        result.vals[i] = {};
-    return result;
-}
-
-int Hash(int hashSetSize, DefinedToken val)
-{
-    int hash = 0;
-    for (int i = 0; i < val.nameLen; ++i)
-        hash = (hash * HASHSET_BASE + val.name[i]) % hashSetSize;
-    return hash;
-}
-
-//Returns either index of val if in the hashset, else the index of a free slot in the hash set
-int LinearProbe(DefinedTokenHashSet* hashSet, DefinedToken val)
-{
-    int hash = Hash(hashSet->size, val);
-    for (int i = 0; i < hashSet->size; ++i)
-    {
-        int index = (hash + i) % hashSet->size;
-        DefinedToken currentVal = hashSet->vals[index];
-		if (!currentVal.name || CompareStrings(currentVal.name, currentVal.nameLen, 
-                                               val.name, val.nameLen))
-		{
-			//if (i > 0)
-			//	printf("Clash at index %i. Moved to index %i\n", hash, index);
-			//else
-			//	printf("String added at index %i\n", index);
-			return index;
-		}
-    }
-
-    Assert(false); //You shouldn't have gotten here
-    return -1;
-}
-
-bool IsInHashSet(DefinedTokenHashSet* hashSet, DefinedToken val)
-{
-    int index = LinearProbe(hashSet, val);
-    return hashSet->vals[index].name != nullptr; 
-}
-
-//TODO: Realloc and rehashing
-void AddToHashSet(DefinedTokenHashSet* hashSet, DefinedToken val)
-{
-    int index = LinearProbe(hashSet, val);
-    if (!hashSet->vals[index].name)
-    {
-        hashSet->vals[index] = val;
-        hashSet->numVals++;
-    }
-}
-
-void RemoveFromHashSet(DefinedTokenHashSet* hashSet, DefinedToken val)
-{
-    int index = LinearProbe(hashSet, val);
-    if (hashSet->vals[index].name)
-    {
-        free(hashSet->vals[index].name);
-		hashSet->vals[index].name = nullptr;
-        hashSet->vals[index].nameLen = 0;
-        hashSet->vals[index].line = -1;
-        hashSet->numVals--;
-
-        index = (index + 1) % hashSet->size;
-        while (hashSet->vals[index].name)
-        {
-            DefinedToken _val = hashSet->vals[index];
-            hashSet->vals[index].name = nullptr;
-            hashSet->vals[index].nameLen = 0;
-            hashSet->vals[index].line = -1;
-            int newIndex = LinearProbe(hashSet, _val);
-            hashSet->vals[newIndex] = _val;
-            index = (index + 1) % hashSet->size;
-        }        
-    }
-}
-
-void RemoveFromHashSet(DefinedTokenHashSet* hashSet, int position)
-{
-    int index = position;
-    if (hashSet->vals[index].name)
-    {
-        free(hashSet->vals[index].name);
-		hashSet->vals[index].name = nullptr;
-        hashSet->vals[index].nameLen = 0;
-        hashSet->vals[index].line = -1;
-        hashSet->numVals--;
-
-        index = (index + 1) % hashSet->size;
-        while (hashSet->vals[index].name)
-        {
-            DefinedToken _val = hashSet->vals[index];
-            hashSet->vals[index].name = nullptr;
-            hashSet->vals[index].nameLen = 0;
-            hashSet->vals[index].line = -1;
-            int newIndex = LinearProbe(hashSet, _val);
-            hashSet->vals[newIndex] = _val;
-            index = (index + 1) % hashSet->size;
-        }        
-    }
-}
-
-DefinedTokenHashSet types = InitHashSet();
-int typesLineToHashTable[INITIAL_HASHSET_SIZE];
-
-DefinedTokenHashSet defines = InitHashSet();
-int definesLineToHashTable[INITIAL_HASHSET_SIZE];
-
-void InitTokeniserStuff()
-{
-    for (int i = 0; i < INITIAL_HASHSET_SIZE; ++i)
-    {
-        typesLineToHashTable[i] = -1;
-        definesLineToHashTable[i] = -1;
-    }
+    numTypedefs = 0;
+    numPoundDefines = 0;
 }
 
 bool IsNumber(char* str, int len)
@@ -166,6 +51,30 @@ bool IsInStringArray(char* str, int len, char** stringArr, int arrLen)
             return true;
     }
     return false;
+}
+
+bool DefinitionExists(bool isTypedef, Token token, Line code)
+{
+    LineView* definitions = (isTypedef) ? typedefs : poundDefines;
+    int numDefinitions = (isTypedef) ? numTypedefs : numPoundDefines;
+    for (int i = 0; i < numDefinitions; ++i)
+    {
+        char* defText = editor.lines[definitions[i].lineIndex].text + definitions[i].textAt;
+        char* tokenText = code.text + token.textAt;
+        if (CompareStrings(defText, definitions[i].textLen, tokenText, token.textLength))
+            return true;
+    } 
+    return false;
+}
+
+inline bool PoundDefineExists(Token token, Line code)
+{
+    return DefinitionExists(false, token, code);
+}
+
+inline bool TypedefExists(Token token, Line code)
+{
+    return DefinitionExists(true, token, code);
 }
 
 Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
@@ -333,31 +242,30 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
         case '<':
         {
             //TODO: Handle this weird angle bracket file name case in the include part
-            if (!IsAlphabetical(code.text[_at]))
+            char* startOfLineText = code.text;
+            while (IsWhiteSpace(startOfLineText[0])) ++startOfLineText;
+            if (CompareStrings(startOfLineText, 8, "#include", 8))
+            {
+                token.type = TOKEN_STRING;
+                
+                int start = _at;
+                while(code.text[_at] != '>' && _at < code.len) _at++;
+                _at += (code.text[_at] == '>');
+                token.textLength = _at - start + 1;
+            }
+            else
             {
                 token.type = TOKEN_OPERATOR;
-                break;
             }
-
-            int start = _at;
-            while((IsAlphabetical(code.text[_at]) || code.text[_at] == '.') && 
-                  _at < code.len)
-            {
-                _at++;
-            }
-            token.textLength = _at - start;
-
-            token.type = (code.text[_at] == '>') ? TOKEN_STRING : TOKEN_UNKNOWN;
-            _at++;
         } break;
 
         case '"':
         {
             token.type = TOKEN_STRING;
-            //starting quotation
+
             int start = _at;
             while(_at < code.len && code.text[_at] != '"') ++_at;
-            token.textLength = _at - start + 1; //end - start + quotation
+            token.textLength = _at - start + 1; //+1 to include quotation
             
             if (code.text[_at] == '"')
             {
@@ -370,7 +278,6 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
 			}
         } break;
 
-        //TODO: This doesn't work, fix it
         case '#':
         {
             int start = _at;
@@ -390,31 +297,18 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
                 {
                     //Get what's actually defined
                     int defStart = _at;
-					while (defStart < code.len && IsWhiteSpace(code.text[defStart])) ++defStart;
+					while (defStart < code.len && IsWhiteSpace(code.text[defStart])) 
+                        ++defStart;
 
                     int defEnd = defStart;
-                    while (defStart < code.len && !IsWhiteSpace(code.text[defEnd])) ++defEnd;
+                    while (defStart < code.len && !IsWhiteSpace(code.text[defEnd])) 
+                        ++defEnd;
                     int defLen = defEnd - defStart;
 
                     //TODO: Handle removing from hashset when name changes (will likely require new struct)
 					if (defLen > 0)
                     {
-                        if (definesLineToHashTable[lineIndex] != -1)
-                        {
-                            //TODO: Only realloc when not enough space
-                            DefinedToken* defToken = &defines.vals[definesLineToHashTable[lineIndex]];
-                            defToken->name = HeapRealloc(char, defToken->name, token.textLength);
-                            memcpy(defToken->name, code.text + defStart, defLen);
-                            defToken->nameLen = defLen;
-                        }
-                        else
-                        {
-                            DefinedToken val = {nullptr, defLen, lineIndex};
-                            val.name = HeapAlloc(char, defLen);
-                            memcpy(val.name, code.text + defStart, defLen);
-						    AddToHashSet(&defines, val);
-                            definesLineToHashTable[lineIndex] = LinearProbe(&defines, val);
-                        }
+                        poundDefines[numPoundDefines++] = {lineIndex, defStart, defLen}; 
                     }
                 }
             }
@@ -483,36 +377,21 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
                     token.type = TOKEN_INBUILT_TYPE;
                     
                     //If a struct or enum, add the type
-                    //TODO: make like a boolean to know that the next token is meant to be a custom type and move this into that section
                     if (CompareStrings(tokenStr, token.textLength, "struct", 6) ||
                         CompareStrings(tokenStr, token.textLength, "enum", 4))
                     {
                         int typeStart = _at;
-                        while (typeStart < code.len && IsWhiteSpace(code.text[typeStart])) ++typeStart;
+                        while (typeStart < code.len && IsWhiteSpace(code.text[typeStart])) 
+                            ++typeStart;
 
                         int typeEnd = typeStart;
-                        while (typeStart < code.len && !IsWhiteSpace(code.text[typeEnd])) ++typeEnd;
+                        while (typeStart < code.len && !IsWhiteSpace(code.text[typeEnd])) 
+                            ++typeEnd;
                         int typeLen = typeEnd - typeStart;
 
-                        //TODO: Handle removing from hashset when name changes (will likely require new struct)
                         if (typeLen > 0)
                         {
-                            if (typesLineToHashTable[lineIndex] != -1)
-                            {
-                                //TODO: Only realloc when not enough space
-                                DefinedToken* typeToken = &types.vals[typesLineToHashTable[lineIndex]];
-                                typeToken->name = HeapRealloc(char, typeToken->name, token.textLength);
-                                memcpy(typeToken->name, code.text + typeStart, typeLen);
-                                typeToken->nameLen = typeLen;
-                            }
-                            else
-                            {
-                                DefinedToken val = {nullptr, typeLen, lineIndex};
-                                val.name = HeapAlloc(char, typeLen);
-                                memcpy(val.name, code.text + typeStart, typeLen);
-					    	    AddToHashSet(&types, val);
-                                typesLineToHashTable[lineIndex] = LinearProbe(&types, val);
-                            }
+                            typedefs[numTypedefs++] = {lineIndex, typeStart, typeLen};
                         }
                     }
                 }
@@ -520,18 +399,13 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
                 {
                     token.type = TOKEN_BOOL;
                 }
-                else
+                else if (PoundDefineExists(token, code))
                 {
-                    DefinedToken definedToken = {nullptr, token.textLength, -1};
-                    definedToken.name = HeapAlloc(char, token.textLength);
-                    memcpy(definedToken.name, tokenStr, token.textLength);
-
-                    if (IsInHashSet(&defines, definedToken))
-                        token.type = TOKEN_DEFINE;
-                    else if (IsInHashSet(&types, definedToken))
-                        token.type = TOKEN_CUSTOM_TYPE;
-                    else
-                        free(definedToken.name);
+                    token.type = TOKEN_DEFINE;
+                }
+                else if (TypedefExists(token, code))
+                {
+                    token.type = TOKEN_CUSTOM_TYPE;
                 } 
                 
             }

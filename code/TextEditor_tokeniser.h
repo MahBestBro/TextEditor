@@ -1,6 +1,7 @@
 #ifndef TEXT_EDITOR_TOKENISER_H
 #define TEXT_EDITOR_TOKENISER_H
 
+
 //Thanks winapi for not allowing me to name this TokenType
 enum TypeOfToken
 {    
@@ -37,26 +38,13 @@ struct Token
     TypeOfToken type;
 };
 
-struct Tokeniser
-{
-    char* code;
-    int at;
-    int codeLen;
-};
-
 struct TokenInfo
 {
     Token* tokens;
     int numTokens;
 };
 
-struct StringContainer
-{
-    char* strings[32];
-    int count;
-};
-
-void InitTokeniserStuff();
+void ResetTypeAndDefTokens();
 TokenInfo TokeniseLine(Line code, int lineIndex, MultilineState* multilineState);
 
 #endif

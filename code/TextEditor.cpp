@@ -285,7 +285,7 @@ void DrawText(char* text, int xCoord, int yCoord, Colour colour, Rect limits = {
 //EDITOR HELPER FUNCTIONS
 //
 
-global_variable Editor editor;
+Editor editor;
 
 void InitHighlight(int initialTextIndex, int initialLineIndex)
 {
@@ -375,7 +375,7 @@ void MoveCursorForward()
     {
         //Go down a line
         editor.cursorPos.line++;
-        editor.cursorPos.textAt = 0;
+		editor.cursorPos.textAt = 0;
         if (InputHeld(input.leftCtrl))
             AdvanceCursorToEndOfWord(true);
 
@@ -402,7 +402,7 @@ void MoveCursorBackward()
         //Go up a line
         editor.cursorPos.line--;
         editor.cursorPos.textAt = editor.lines[editor.cursorPos.line].len;
-        if (InputHeld(input.leftCtrl))
+        if (InputHeld(input.leftCtrl) && editor.lines[editor.cursorPos.line].len > 0)
             AdvanceCursorToEndOfWord(false);
 
         if (InputHeld(input.leftShift))
@@ -1473,8 +1473,6 @@ void Init()
     }
 
     userSettings = LoadUserSettingsFromConfigFile();
-
-    InitTokeniserStuff();
 }
 
 void Draw(float dt)
@@ -1853,6 +1851,8 @@ void Draw(float dt)
                     userSettings.lineNumColour, 
                     {0, 0, yBottomLimit, 0});
     }
+
+    ResetTypeAndDefTokens();
 
     //Draw highlighted text
     if (editor.highlightStart.textAt != -1) 
