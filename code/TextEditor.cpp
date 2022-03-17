@@ -286,6 +286,10 @@ void DrawText(char* text, int xCoord, int yCoord, Colour colour, Rect limits = {
 //
 
 Editor editor;
+//TODO: Change this so it isn't arr of arr (ideally when moving TokeniseAllLines out of this file)
+internal TokenInfo* tokenInfos = nullptr;
+internal int numLinesBeforeTokenise = 0;
+internal int tokenInfosAlloced = 0;
 
 void InitHighlight(int initialTextIndex, int initialLineIndex)
 {
@@ -323,38 +327,6 @@ void AdvanceCursorToEndOfWord(bool forward)
     }
     while (InRange(editor.cursorPos.textAt, 1, line.len - 1) && 
           (skipOverSpace || ShouldAdvance(line.text[editor.cursorPos.textAt - !forward])));
-}
-
-TextSectionInfo GetTextSectionInfo(EditorPos start, EditorPos end)
-{
-    TextSectionInfo result;
-    if (start.line > end.line)
-    {
-        result.top.textAt = end.textAt;
-        result.top.line = end.line;
-        result.bottom.textAt = start.textAt;
-        result.bottom.line = start.line;
-        result.topLen = editor.lines[result.top.line].len - result.top.textAt;
-    }
-    else if (start.line < end.line)
-    {
-        result.top.textAt = start.textAt;
-        result.top.line = start.line;
-        result.bottom.textAt = end.textAt;
-        result.bottom.line = end.line;
-        result.topLen = editor.lines[result.top.line].len - result.top.textAt;
-    }
-    else
-    {
-        result.top.textAt = min(start.textAt, end.textAt);
-        result.top.line = end.line;
-        result.bottom.textAt = max(start.textAt, end.textAt);
-        result.bottom.line = result.top.line;
-        result.spansOneLine = true;
-        result.topLen = result.bottom.textAt - result.top.textAt;
-    }
-
-    return result;
 }
 
 void MoveCursorForward()
@@ -533,6 +505,38 @@ void RemoveTextSection(TextSectionInfo sectionInfo)
     SetTopChangedLine(editor.cursorPos.line);
 
 	if (remainingBottomText) free(remainingBottomText);
+}
+
+TextSectionInfo GetTextSectionInfo(EditorPos start, EditorPos end)
+{
+    TextSectionInfo result;
+    if (start.line > end.line)
+    {
+        result.top.textAt = end.textAt;
+        result.top.line = end.line;
+        result.bottom.textAt = start.textAt;
+        result.bottom.line = start.line;
+        result.topLen = editor.lines[result.top.line].len - result.top.textAt;
+    }
+    else if (start.line < end.line)
+    {
+        result.top.textAt = start.textAt;
+        result.top.line = start.line;
+        result.bottom.textAt = end.textAt;
+        result.bottom.line = end.line;
+        result.topLen = editor.lines[result.top.line].len - result.top.textAt;
+    }
+    else
+    {
+        result.top.textAt = min(start.textAt, end.textAt);
+        result.top.line = end.line;
+        result.bottom.textAt = max(start.textAt, end.textAt);
+        result.bottom.line = result.top.line;
+        result.spansOneLine = true;
+        result.topLen = result.bottom.textAt - result.top.textAt;
+    }
+
+    return result;
 }
 
 void AddToUndoStack(EditorPos undoStart, EditorPos undoEnd, UndoType type, bool redo = false)
@@ -716,6 +720,21 @@ void SaveFile(char* fileName, size_t fileNameLen)
     editor.topChangedLineIndex = -1;
 }
 
+void TokeniseAllLines()
+{
+    for (int i = 0; i < numLinesBeforeTokenise; ++i)
+        free(tokenInfos[i].tokens);
+
+    if (!tokenInfos || editor.numLines > tokenInfosAlloced) 
+        tokenInfos = HeapRealloc(TokenInfo, tokenInfos, editor.numLines);
+
+    MultilineState multilineState = MS_NON_MULTILINE;
+    for (int i = 0; i < editor.numLines; ++i)
+        tokenInfos[i] = TokeniseLine(editor.lines[i], i, &multilineState);
+
+    numLinesBeforeTokenise = editor.numLines;
+}
+
 //TODO: Double check memory leaks
 void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
 {
@@ -821,7 +840,6 @@ void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
                 editor.highlightStart = (undoInfo.prevCursorPos == insertEnd) ? 
                                         insertStart : insertEnd;
             }
-            
         } break;
 
         //TODO: This assumes that multine cursors are all at the same text index on each line, make this handle different test indicies
@@ -946,6 +964,7 @@ void AddChar()
 
     int numCharsAdded = 0; 
     char textToInsert[5]; //this'll likely never need to be greater than 5
+    bool addedTwoCharacters = false;
     switch(editor.currentChar)
     {
         case '\t':
@@ -962,6 +981,7 @@ void AddChar()
             numCharsAdded = 2;
             textToInsert[0] = editor.currentChar;
             textToInsert[1] = GetOtherBracket(editor.currentChar);
+            addedTwoCharacters = true;
         } break;
 
         //TODO: Have ' only add one char if in comment
@@ -971,6 +991,7 @@ void AddChar()
             numCharsAdded = 2;
             textToInsert[0] = editor.currentChar;
             textToInsert[1] = editor.currentChar;
+            addedTwoCharacters = true;
         } break;
 
         default:
@@ -986,8 +1007,11 @@ void AddChar()
     editor.cursorPos.textAt += (editor.currentChar == '\t') ? numCharsAdded : 1;
 
     editor.undoStack[editor.numUndos - 1].end = editor.cursorPos;
+    if (addedTwoCharacters) editor.undoStack[editor.numUndos - 1].end.textAt++;
 
     SetTopChangedLine(editor.cursorPos.line);
+
+    TokeniseAllLines();
 }
 
 void RemoveChar()
@@ -1068,6 +1092,8 @@ void Backspace()
     {
         RemoveChar();
     }
+
+    TokeniseAllLines();
 }
 
 void UnTab()
@@ -1154,6 +1180,8 @@ void UnTab()
         editor.undoStack[editor.numUndos - 1].type = UNDOTYPE_MULTILINE_REMOVE;
         editor.undoStack[editor.numUndos - 1].end.line = highlight.bottom.line;
     }
+
+    TokeniseAllLines();
 }
 
 void Enter()
@@ -1197,7 +1225,7 @@ void Enter()
         editor.undoStack[editor.numUndos - 1].end = editor.cursorPos;
     }
 
-	
+	TokeniseAllLines();
 }
 
 void HighlightCurrentLine()
@@ -1259,6 +1287,8 @@ void RemoveCurrentLine()
     ClearHighlights();
     
     SetTopChangedLine(editor.cursorPos.line);
+
+    TokeniseAllLines();
 }
 
 //TODO: Double check if this is susceptable to overflow attacks and Unix Compatability
@@ -1353,7 +1383,9 @@ void Paste()
         for (int i = 0; i < numLinesToPaste; ++i)
             free(linesToPaste[i]);
         free(linesToPaste);
-    }   
+
+        TokeniseAllLines();  
+    } 
 }
 
 //TODO: Investigate Performance of this
@@ -1368,6 +1400,8 @@ void CutHighlightedText()
 
     RemoveTextSection(GetTextSectionInfo(editor.highlightStart, editor.cursorPos));
     ClearHighlights();
+
+    TokeniseAllLines();
 }
 
 //TODO: Resize editor.lines if file too big + maybe return success bool?
@@ -1433,6 +1467,8 @@ void Undo()
 
     UndoInfo undoInfo = editor.undoStack[--editor.numUndos];
     HandleUndoInfo(undoInfo, false);
+
+    TokeniseAllLines();
 }
 
 void Redo()
@@ -1441,29 +1477,30 @@ void Redo()
 
     UndoInfo redoInfo = editor.redoStack[--editor.numRedos];
     HandleUndoInfo(redoInfo, true);
+
+    TokeniseAllLines();
 }
 
 //
 //MAIN LOOP/STUFF
 //
 
-TimedEvent cursorBlink = {0.5f};
-TimedEvent holdChar = {0.5f};
-TimedEvent repeatChar = {0.02f, &AddChar};
-
-TimedEvent holdAction = {0.5f};
-TimedEvent repeatAction = {0.02f};
+internal TimedEvent cursorBlink = {0.5f};
+internal TimedEvent holdChar = {0.5f};
+internal TimedEvent repeatChar = {0.02f, &AddChar};
+internal TimedEvent holdAction = {0.5f};
+internal TimedEvent repeatAction = {0.02f};
 
 //TODO: Move multiclicks of this into input
-int numMultiClicks = 0;
-bool doubleClicked = false;
-TimedEvent doubleClick = {0.5f};
-EditorPos prevMousePos = {-1, -1};
+internal int numMultiClicks = 0;
+internal bool doubleClicked = false;
+internal TimedEvent doubleClick = {0.5f};
+internal EditorPos prevMousePos = {-1, -1};
 
-bool capslockOn = false;
-bool nonCharKeyPressed = false;
+internal bool capslockOn = false;
+internal bool nonCharKeyPressed = false;
 
-UserSettings userSettings;
+internal UserSettings userSettings;
 
 void Init()
 {
@@ -1760,86 +1797,86 @@ void Draw(float dt)
 
     Rect textBounds = {start.x, xRightLimit, yBottomLimit, 0};
 
-    MultilineState multilineState = MS_NON_MULTILINE;
     for (int i = 0; i < editor.numLines; ++i)
     {
         //Draw text
         int x = start.x - editor.textOffset.x;
         int y = start.y - i * CURSOR_HEIGHT + editor.textOffset.y;
-        TokenInfo tokenInfo = TokeniseLine(editor.lines[i], i, &multilineState);
-        //int textOffset = 0;
-        for (int t = 0; t < tokenInfo.numTokens; ++t)
-        {
-            Colour textColour = userSettings.textColour;
-            Token token = tokenInfo.tokens[t];
-            //TODO: Replace this with table lookup once text files come into the equation
-            switch(tokenInfo.tokens[t].type)
-            {
-                case TOKEN_IDENTIFIER:
-                case TOKEN_UNKNOWN:
-                case TOKEN_PUNCTUATION:
-                case TOKEN_EOS:
-                break;
+		if (tokenInfos)
+		{
+			TokenInfo tokenInfo = tokenInfos[i];
+			for (int t = 0; t < tokenInfo.numTokens; ++t)
+			{
+				Colour textColour = userSettings.textColour;
+				Token token = tokenInfo.tokens[t];
+				//TODO: Replace this with table lookup once text files come into the equation
+				switch (tokenInfo.tokens[t].type)
+				{
+					case TOKEN_IDENTIFIER:
+					case TOKEN_UNKNOWN:
+					case TOKEN_PUNCTUATION:
+					case TOKEN_EOS:
+						break;
 
-                case TOKEN_KEYWORD:
-                case TOKEN_OPERATOR:
-                case TOKEN_PREPROCESSOR_TAG:
-                {
-                    textColour = {255, 0, 0};
-                } break;
+					case TOKEN_KEYWORD:
+					case TOKEN_OPERATOR:
+					case TOKEN_PREPROCESSOR_TAG:
+					{
+						textColour = { 255, 0, 0 };
+					} break;
 
-                case TOKEN_NUMBER:
-                case TOKEN_BOOL:
-                {
-                    textColour = {179, 124, 225};
-                } break;
-                
-                case TOKEN_CUSTOM_TYPE:
-                case TOKEN_DEFINE:
-                {
-                    textColour = {25, 0, 255};
-                } break;
+					case TOKEN_NUMBER:
+					case TOKEN_BOOL:
+					{
+						textColour = { 179, 124, 225 };
+					} break;
 
-                case TOKEN_INBUILT_TYPE:
-                {
-                    textColour = {0, 255, 255};
-                } break;
+					case TOKEN_FUNCTION:
+					case TOKEN_CUSTOM_TYPE:
+					case TOKEN_DEFINE:
+					{
+						textColour = { 25, 0, 255 };
+					} break;
 
-                case TOKEN_STRING:
-                {
-                    textColour = {255, 255, 0};
-                } break;
+					case TOKEN_INBUILT_TYPE:
+					{
+						textColour = { 0, 255, 255 };
+					} break;
 
-                case TOKEN_COMMENT:
-                {
-                    textColour = {180, 180, 180};
-                } break;
-            }
+					case TOKEN_STRING:
+					{
+						textColour = { 255, 255, 0 };
+					} break;
 
-            //Draw whitespace before first token
-            if (t == 0)
-            {
-                DrawText(editor.lines[i].text, x, y, textColour, textBounds, token.textAt);
-                x += TextPixelLength(editor.lines[i].text, token.textAt);
-            }
+					case TOKEN_COMMENT:
+					{
+						textColour = { 180, 180, 180 };
+					} break;
+				}
 
-            //Draw token
-            char* text = editor.lines[i].text + token.textAt;
-            DrawText(text, x, y, textColour, textBounds, token.textLength);
-            x += TextPixelLength(text, token.textLength);
+				//Draw whitespace before first token
+				if (t == 0)
+				{
+					DrawText(editor.lines[i].text, x, y, textColour, textBounds, token.textAt);
+					x += TextPixelLength(editor.lines[i].text, token.textAt);
+				}
 
-            //Draw whitespace
-            if (t < tokenInfo.numTokens - 1)
-            {
-                text += token.textLength;
-                int remainderLength = tokenInfo.tokens[t + 1].textAt - token.textAt - token.textLength;
-                DrawText(text, x, y, textColour, textBounds, remainderLength);
-                x += TextPixelLength(text, remainderLength);
-            }
-            
-        }
-            
-        free(tokenInfo.tokens);
+				//Draw token
+				char* text = editor.lines[i].text + token.textAt;
+				DrawText(text, x, y, textColour, textBounds, token.textLength);
+				x += TextPixelLength(text, token.textLength);
+
+				//Draw whitespace
+				if (t < tokenInfo.numTokens - 1)
+				{
+					text += token.textLength;
+					int remainderLength = tokenInfo.tokens[t + 1].textAt - token.textAt - token.textLength;
+					DrawText(text, x, y, textColour, textBounds, remainderLength);
+					x += TextPixelLength(text, remainderLength);
+				}
+
+			}
+		}
 
         //Draw Line num
         char lineNumText[8];

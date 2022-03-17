@@ -241,7 +241,6 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
 
         case '<':
         {
-            //TODO: Handle this weird angle bracket file name case in the include part
             char* startOfLineText = code.text;
             while (IsWhiteSpace(startOfLineText[0])) ++startOfLineText;
             if (CompareStrings(startOfLineText, 8, "#include", 8))
@@ -305,7 +304,6 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
                         ++defEnd;
                     int defLen = defEnd - defStart;
 
-                    //TODO: Handle removing from hashset when name changes (will likely require new struct)
 					if (defLen > 0)
                     {
                         poundDefines[numPoundDefines++] = {lineIndex, defStart, defLen}; 
@@ -324,7 +322,7 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
             if (IsAlphabetical(c))
             {
                 int start = _at;
-                while (IsAlphaNumeric(code.text[_at]) || code.text[_at] == '_')
+                while (_at < code.len && (IsAlphaNumeric(code.text[_at]) || code.text[_at] == '_'))
                 {
                     ++_at;
                 }
@@ -370,6 +368,10 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
                         types.strings[types.count][typeLen] = 0;
                         types.count++;
                     }*/
+                }
+                else if (code.text[_at] == '(')
+                {
+                    token.type = TOKEN_FUNCTION;
                 }
                 else if (IsInStringArray(tokenStr, token.textLength, inbuiltTypes, 
                          StackArrayLen(inbuiltTypes))) 

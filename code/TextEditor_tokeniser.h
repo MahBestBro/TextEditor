@@ -12,6 +12,7 @@ enum TypeOfToken
     TOKEN_NUMBER,
     TOKEN_BOOL,
     TOKEN_IDENTIFIER,
+    TOKEN_FUNCTION,
     TOKEN_CUSTOM_TYPE,
     TOKEN_INBUILT_TYPE,
     TOKEN_KEYWORD,
@@ -40,7 +41,7 @@ struct Token
 
 struct TokenInfo
 {
-    Token* tokens;
+    Token* tokens = nullptr;
     int numTokens;
 };
 
