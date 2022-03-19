@@ -286,10 +286,8 @@ void DrawText(char* text, int xCoord, int yCoord, Colour colour, Rect limits = {
 //
 
 Editor editor;
-//TODO: Change this so it isn't arr of arr (ideally when moving TokeniseAllLines out of this file)
-internal TokenInfo* tokenInfos = nullptr;
-internal int numLinesBeforeTokenise = 0;
-internal int tokenInfosAlloced = 0;
+
+internal TokenInfo tokenInfo;
 
 void InitHighlight(int initialTextIndex, int initialLineIndex)
 {
@@ -720,21 +718,6 @@ void SaveFile(char* fileName, size_t fileNameLen)
     editor.topChangedLineIndex = -1;
 }
 
-void TokeniseAllLines()
-{
-    for (int i = 0; i < numLinesBeforeTokenise; ++i)
-        free(tokenInfos[i].tokens);
-
-    if (!tokenInfos || editor.numLines > tokenInfosAlloced) 
-        tokenInfos = HeapRealloc(TokenInfo, tokenInfos, editor.numLines);
-
-    MultilineState multilineState = MS_NON_MULTILINE;
-    for (int i = 0; i < editor.numLines; ++i)
-        tokenInfos[i] = TokeniseLine(editor.lines[i], i, &multilineState);
-
-    numLinesBeforeTokenise = editor.numLines;
-}
-
 //TODO: Double check memory leaks
 void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
 {
@@ -1011,7 +994,7 @@ void AddChar()
 
     SetTopChangedLine(editor.cursorPos.line);
 
-    TokeniseAllLines();
+    Tokenise(&tokenInfo);
 }
 
 void RemoveChar()
@@ -1093,7 +1076,7 @@ void Backspace()
         RemoveChar();
     }
 
-    TokeniseAllLines();
+    Tokenise(&tokenInfo);
 }
 
 void UnTab()
@@ -1181,7 +1164,7 @@ void UnTab()
         editor.undoStack[editor.numUndos - 1].end.line = highlight.bottom.line;
     }
 
-    TokeniseAllLines();
+    Tokenise(&tokenInfo);
 }
 
 void Enter()
@@ -1225,7 +1208,7 @@ void Enter()
         editor.undoStack[editor.numUndos - 1].end = editor.cursorPos;
     }
 
-	TokeniseAllLines();
+	Tokenise(&tokenInfo);
 }
 
 void HighlightCurrentLine()
@@ -1288,7 +1271,7 @@ void RemoveCurrentLine()
     
     SetTopChangedLine(editor.cursorPos.line);
 
-    TokeniseAllLines();
+    Tokenise(&tokenInfo);
 }
 
 //TODO: Double check if this is susceptable to overflow attacks and Unix Compatability
@@ -1384,7 +1367,7 @@ void Paste()
             free(linesToPaste[i]);
         free(linesToPaste);
 
-        TokeniseAllLines();  
+        Tokenise(&tokenInfo); 
     } 
 }
 
@@ -1401,7 +1384,7 @@ void CutHighlightedText()
     RemoveTextSection(GetTextSectionInfo(editor.highlightStart, editor.cursorPos));
     ClearHighlights();
 
-    TokeniseAllLines();
+    Tokenise(&tokenInfo);
 }
 
 //TODO: Resize editor.lines if file too big + maybe return success bool?
@@ -1468,7 +1451,7 @@ void Undo()
     UndoInfo undoInfo = editor.undoStack[--editor.numUndos];
     HandleUndoInfo(undoInfo, false);
 
-    TokeniseAllLines();
+    Tokenise(&tokenInfo);
 }
 
 void Redo()
@@ -1478,7 +1461,7 @@ void Redo()
     UndoInfo redoInfo = editor.redoStack[--editor.numRedos];
     HandleUndoInfo(redoInfo, true);
 
-    TokeniseAllLines();
+    Tokenise(&tokenInfo);
 }
 
 //
@@ -1797,99 +1780,110 @@ void Draw(float dt)
 
     Rect textBounds = {start.x, xRightLimit, yBottomLimit, 0};
 
-    for (int i = 0; i < editor.numLines; ++i)
+    //Draw all of the text on screen
     {
-        //Draw text
-        int x = start.x - editor.textOffset.x;
-        int y = start.y - i * CURSOR_HEIGHT + editor.textOffset.y;
-		if (tokenInfos)
-		{
-			TokenInfo tokenInfo = tokenInfos[i];
-			for (int t = 0; t < tokenInfo.numTokens; ++t)
-			{
-				Colour textColour = userSettings.textColour;
-				Token token = tokenInfo.tokens[t];
-				//TODO: Replace this with table lookup once text files come into the equation
-				switch (tokenInfo.tokens[t].type)
-				{
-					case TOKEN_IDENTIFIER:
-					case TOKEN_UNKNOWN:
-					case TOKEN_PUNCTUATION:
-					case TOKEN_EOS:
-						break;
+	    const int lineNumOffset = (fontChars[' '].advance) * 4;
+        //Draw first number always just in case there's no text at all
+        if (tokenInfo.numTokens == 0)
+        {
+	        DrawText("1",
+	    	         start.x - lineNumOffset,
+	    	         start.y - editor.textOffset.y,
+	    	         userSettings.lineNumColour,
+	    	         { 0, 0, yBottomLimit, 0 });
+        }
 
-					case TOKEN_KEYWORD:
-					case TOKEN_OPERATOR:
-					case TOKEN_PREPROCESSOR_TAG:
-					{
-						textColour = { 255, 0, 0 };
-					} break;
+        int x = 0;
+        for (int t = 0; t < tokenInfo.numTokens; ++t)
+        {
+            Token token = tokenInfo.tokens[t];
+            int currentLine = token.at.line; 
 
-					case TOKEN_NUMBER:
-					case TOKEN_BOOL:
-					{
-						textColour = { 179, 124, 225 };
-					} break;
+            //Draw text
+            if (t == 0 || tokenInfo.tokens[t - 1].at.line != token.at.line)
+                x = start.x - editor.textOffset.x;
+            int y = start.y - currentLine * CURSOR_HEIGHT + editor.textOffset.y;
 
-					case TOKEN_FUNCTION:
-					case TOKEN_CUSTOM_TYPE:
-					case TOKEN_DEFINE:
-					{
-						textColour = { 25, 0, 255 };
-					} break;
+            Colour textColour = userSettings.textColour;
+            //TODO: Replace this with table lookup once text files come into the equation
+            switch (tokenInfo.tokens[t].type)
+            {
+                case TOKEN_IDENTIFIER:
+                case TOKEN_UNKNOWN:
+                case TOKEN_PUNCTUATION:
+                case TOKEN_EOS:
+                    break;
 
-					case TOKEN_INBUILT_TYPE:
-					{
-						textColour = { 0, 255, 255 };
-					} break;
+                case TOKEN_KEYWORD:
+                case TOKEN_OPERATOR:
+                case TOKEN_PREPROCESSOR_TAG:
+                {
+                    textColour = { 255, 0, 0 };
+                } break;
 
-					case TOKEN_STRING:
-					{
-						textColour = { 255, 255, 0 };
-					} break;
+                case TOKEN_NUMBER:
+                case TOKEN_BOOL:
+                {
+                    textColour = { 179, 124, 225 };
+                } break;
 
-					case TOKEN_COMMENT:
-					{
-						textColour = { 180, 180, 180 };
-					} break;
-				}
+                case TOKEN_FUNCTION:
+                case TOKEN_CUSTOM_TYPE:
+                case TOKEN_DEFINE:
+                {
+                    textColour = { 25, 0, 255 };
+                } break;
 
-				//Draw whitespace before first token
-				if (t == 0)
-				{
-					DrawText(editor.lines[i].text, x, y, textColour, textBounds, token.textAt);
-					x += TextPixelLength(editor.lines[i].text, token.textAt);
-				}
+                case TOKEN_INBUILT_TYPE:
+                {
+                    textColour = { 0, 255, 255 };
+                } break;
 
-				//Draw token
-				char* text = editor.lines[i].text + token.textAt;
-				DrawText(text, x, y, textColour, textBounds, token.textLength);
-				x += TextPixelLength(text, token.textLength);
+                case TOKEN_STRING:
+                {
+                    textColour = { 255, 255, 0 };
+                } break;
 
-				//Draw whitespace
-				if (t < tokenInfo.numTokens - 1)
-				{
-					text += token.textLength;
-					int remainderLength = tokenInfo.tokens[t + 1].textAt - token.textAt - token.textLength;
-					DrawText(text, x, y, textColour, textBounds, remainderLength);
-					x += TextPixelLength(text, remainderLength);
-				}
+                case TOKEN_COMMENT:
+                {
+                    textColour = { 180, 180, 180 };
+                } break;
+            }
 
-			}
-		}
+            //Draw whitespace before first token
+            if (t == 0)
+            {
+                DrawText(editor.lines[currentLine].text, x, y, textColour, textBounds, token.at.textAt);
+                x += TextPixelLength(editor.lines[currentLine].text, token.at.textAt);
+            }
 
-        //Draw Line num
-        char lineNumText[8];
-        IntToString(i + 1, lineNumText);
-        int lineNumOffset = (fontChars[' '].advance) * 4;
-        DrawText(lineNumText, 
-                    start.x - lineNumOffset, 
-                    y, 
-                    userSettings.lineNumColour, 
-                    {0, 0, yBottomLimit, 0});
+            //Draw token
+            char* text = editor.lines[currentLine].text + token.at.textAt;
+            DrawText(text, x, y, textColour, textBounds, token.textLength);
+            x += TextPixelLength(text, token.textLength);
+
+            //Draw whitespace
+            if (t < tokenInfo.numTokens - 1)
+            {
+                text += token.textLength;
+                int remainderLength = tokenInfo.tokens[t + 1].at.textAt - token.at.textAt 
+                                      - token.textLength;
+                DrawText(text, x, y, textColour, textBounds, remainderLength);
+                x += TextPixelLength(text, remainderLength);
+            }
+
+            //Draw Line num
+            char lineNumText[8]; //TODO: Calculate how many lines we want max cause fucking ey this will likely go to shit
+            IntToString(currentLine + 1, lineNumText);
+            DrawText(lineNumText, 
+                     start.x - lineNumOffset, 
+                     y, 
+                     userSettings.lineNumColour, 
+                     {0, 0, yBottomLimit, 0});
+
+
+        }
     }
-
-    ResetTypeAndDefTokens();
 
     //Draw highlighted text
     if (editor.highlightStart.textAt != -1) 

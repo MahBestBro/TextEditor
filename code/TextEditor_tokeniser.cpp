@@ -22,12 +22,6 @@ internal int numTypedefs = 0;
 internal LineView poundDefines[INITIAL_TYPEDEFS_SIZE];
 internal int numPoundDefines = 0;
 
-void ResetTypeAndDefTokens()
-{
-    numTypedefs = 0;
-    numPoundDefines = 0;
-}
-
 bool IsNumber(char* str, int len)
 {
     for (int i = 0; i < len; ++i)
@@ -60,7 +54,7 @@ bool DefinitionExists(bool isTypedef, Token token, Line code)
     for (int i = 0; i < numDefinitions; ++i)
     {
         char* defText = editor.lines[definitions[i].lineIndex].text + definitions[i].textAt;
-        char* tokenText = code.text + token.textAt;
+        char* tokenText = code.text + token.at.textAt;
         if (CompareStrings(defText, definitions[i].textLen, tokenText, token.textLength))
             return true;
     } 
@@ -119,7 +113,7 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
     };
 
     Token token = {};
-    token.textAt = _at;
+    token.at = {_at, lineIndex};
 	if (_at == code.len)
 	{
 		token.textLength = 0;
@@ -286,13 +280,13 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
             }
             token.textLength += _at - start;
 
-            if (IsInStringArray(code.text + token.textAt, token.textLength, 
+            if (IsInStringArray(code.text + token.at.textAt, token.textLength, 
                 preprocessorTags, StackArrayLen(preprocessorTags)))
             {
                 token.type = TOKEN_PREPROCESSOR_TAG;
 
                 
-                if (CompareStrings(code.text + token.textAt, token.textLength, "#define", 7))
+                if (CompareStrings(code.text + token.at.textAt, token.textLength, "#define", 7))
                 {
                     //Get what's actually defined
                     int defStart = _at;
@@ -328,7 +322,7 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
                 }
                 token.textLength += _at - start;
                 
-                char* tokenStr = code.text + token.textAt;
+                char* tokenStr = code.text + token.at.textAt;
                 if (IsInStringArray(tokenStr, token.textLength, keywords, StackArrayLen(keywords)))
                 {
                     token.type = TOKEN_KEYWORD;
@@ -413,10 +407,11 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
             }
             else if (IsNumeric(c))
             {
+                //TODO: also include letter at end of number 
                 int start = _at;
                 while (IsNumeric(code.text[_at])) ++_at;  
                 token.textLength += _at - start;
-                char* tokenStr = code.text + token.textAt;
+                char* tokenStr = code.text + token.at.textAt;
                 
                 token.type = (IsNumber(tokenStr, token.textLength)) ? TOKEN_NUMBER : TOKEN_UNKNOWN;
             }
@@ -433,7 +428,7 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
 }
 
 //Maybe make editor variable global across files so that we only need to pass index?
-TokenInfo TokeniseLine(Line code, int lineIndex, MultilineState* multilineState)
+/*TokenInfo TokeniseLine(Line code, int lineIndex, MultilineState* multilineState)
 {
     //The number of tokens in a line should not exceed that line's length 
     TokenInfo result = {};
@@ -450,4 +445,26 @@ TokenInfo TokeniseLine(Line code, int lineIndex, MultilineState* multilineState)
     }
 
     return result;
+}*/
+
+void Tokenise(TokenInfo* dest)
+{
+    Assert(editor.numLines < MAX_LINES);
+
+    numTypedefs = 0;
+    numPoundDefines = 0;
+    dest->numTokens = 0;
+
+    MultilineState multilineState = MS_NON_MULTILINE;
+    for (int i = 0; i < editor.numLines; ++i)
+    {
+        int lineAt = 0;
+        bool parsing = true;
+        while (parsing)
+        {
+            Token token = GetTokenFromLine(editor.lines[i], i, &lineAt, &multilineState);
+            dest->tokens[dest->numTokens++] = token;
+            parsing = (lineAt != editor.lines[i].len);
+        }
+    }
 }

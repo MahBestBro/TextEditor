@@ -1,3 +1,6 @@
+#include "TextEditor_defs.h"
+#include "TextEditor.h"
+
 #ifndef TEXT_EDITOR_TOKENISER_H
 #define TEXT_EDITOR_TOKENISER_H
 
@@ -34,18 +37,18 @@ enum MultilineState
 
 struct Token
 {
-    int textAt;
+    EditorPos at;
     int textLength;
     TypeOfToken type;
 };
 
 struct TokenInfo
 {
-    Token* tokens = nullptr;
+    Token tokens[MAX_LINES];
     int numTokens;
 };
 
-void ResetTypeAndDefTokens();
+void Tokenise(TokenInfo* dest);
 TokenInfo TokeniseLine(Line code, int lineIndex, MultilineState* multilineState);
 
 #endif
