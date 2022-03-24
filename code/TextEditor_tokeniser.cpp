@@ -71,6 +71,48 @@ inline bool TypedefExists(Token token, Line code)
     return DefinitionExists(true, token, code);
 }
 
+void AddTypeNameForTypedef(EditorPos at)
+{
+    Line currentLine = editor.lines[at.line];
+
+    //Skip over first word
+    while (at.textAt < currentLine.len && !IsWhiteSpace(currentLine.text[at.textAt]))
+        at.textAt++;
+
+    //While we haven't hit a semicolon, also skip over curly crackets
+    int scopeLevel = 0;
+    while (true)
+    {
+        if (at.textAt == currentLine.len)
+        {
+			at.line++;
+            if (at.line == editor.numLines) break;
+			currentLine = editor.lines[at.line];
+            at.textAt = 0;
+        }
+
+		if (currentLine.len > 0)
+		{
+			char charAt = currentLine.text[at.textAt];
+			scopeLevel += charAt == '{';
+			scopeLevel -= charAt == '}';
+			if (scopeLevel == 0 && charAt == ';') break;
+			at.textAt++;
+		}
+    }
+
+    //Get all text behind semicolon on line and add it as a type
+    if (at.line < editor.numLines)
+    {
+        int typeStart = at.textAt;
+        while (typeStart < currentLine.len && !IsWhiteSpace(currentLine.text[typeStart])) 
+            typeStart--;
+        int typeLen = at.textAt - typeStart - 1;
+
+        typedefs[numTypedefs++] = {at.line, typeStart + 1, typeLen};
+    }
+}
+
 Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
 {
     //EatWhitespaceAndComments(tokeniser);
@@ -328,40 +370,10 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
                     token.type = TOKEN_KEYWORD;
 
                     //If typedef, add type
-                    //char tokenText[token.textLength + 1];
-                    //snprintf(tokenText, sizeof(tokenText), "%.*s", token.textLength, token.text);
-                    /*if (CompareStrings(token.text, token.textLength, "typedef", 7))
+                    if (CompareStrings(tokenStr, token.textLength, "typedef", 7))
                     {
-                        //Search for semicolon
-                        char* at = _at;
-                        while (at[0] != ';')
-                        {
-                            if (at[0] == '{')
-                            {
-                                while (at[0] != '}')
-                                {
-                                    ++at;
-                                }
-                            }
-                            else ++at;
-                            
-                        }
-                        char* end = at;
-
-                        //Get type length
-                        while (!IsWhiteSpace(at[0]))
-                        {
-                            --at;
-                        }
-                        ++at;
-                        int typeLen = (int)(end - at);
-
-                        //Add type to types
-                        types.strings[types.count] = HeapAlloc(char, typeLen + 1);
-                        memcpy(types.strings[types.count], at, typeLen + 1);
-                        types.strings[types.count][typeLen] = 0;
-                        types.count++;
-                    }*/
+                        AddTypeNameForTypedef({_at, lineIndex});
+                    }
                 }
                 else if (code.text[_at] == '(')
                 {

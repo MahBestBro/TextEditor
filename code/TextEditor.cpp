@@ -1850,15 +1850,14 @@ void Draw(float dt)
                 } break;
             }
 
-            //Draw whitespace before first token
-            if (t == 0)
-            {
-                DrawText(editor.lines[currentLine].text, x, y, textColour, textBounds, token.at.textAt);
-                x += TextPixelLength(editor.lines[currentLine].text, token.at.textAt);
-            }
+            char* text = editor.lines[currentLine].text;
+
+            //Draw whitespace at front of line
+			if (t == 0 || currentLine != tokenInfo.tokens[t - 1].at.line)
+				x += TextPixelLength(text, token.at.textAt);
 
             //Draw token
-            char* text = editor.lines[currentLine].text + token.at.textAt;
+			text += token.at.textAt;
             DrawText(text, x, y, textColour, textBounds, token.textLength);
             x += TextPixelLength(text, token.textLength);
 
