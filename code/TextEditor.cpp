@@ -1793,6 +1793,28 @@ void Draw(float dt)
 	    	         { 0, 0, yBottomLimit, 0 });
         }
 
+        //TODO: Move this into UserSettings and get rid of code generation (knew it was a shit idea)
+        Colour tokenColours[NUM_TOKENS] = 
+        {
+            userSettings.punctuationColour,
+            userSettings.operatorColour,
+
+            userSettings.stringColour,
+            userSettings.numberColour,
+            userSettings.boolColour,
+            userSettings.identifierColour,
+            userSettings.functionColour,
+            userSettings.customTypeColour,
+            userSettings.inbuiltTypeColour,
+            userSettings.keywordColour,
+            userSettings.preprocessorColour,
+            userSettings.defineColour,
+            
+            userSettings.commentColour,
+            {0},
+            userSettings.unknownColour
+        };
+
         int x = 0;
         for (int t = 0; t < tokenInfo.numTokens; ++t)
         {
@@ -1803,61 +1825,17 @@ void Draw(float dt)
             if (t == 0 || tokenInfo.tokens[t - 1].at.line != token.at.line)
                 x = start.x - editor.textOffset.x;
             int y = start.y - currentLine * CURSOR_HEIGHT + editor.textOffset.y;
-
-            Colour textColour = userSettings.textColour;
-            //TODO: Replace this with table lookup once text files come into the equation
-            switch (tokenInfo.tokens[t].type)
-            {
-                case TOKEN_IDENTIFIER:
-                case TOKEN_UNKNOWN:
-                case TOKEN_PUNCTUATION:
-                case TOKEN_EOS:
-                    break;
-
-                case TOKEN_KEYWORD:
-                case TOKEN_OPERATOR:
-                case TOKEN_PREPROCESSOR_TAG:
-                {
-                    textColour = { 255, 0, 0 };
-                } break;
-
-                case TOKEN_NUMBER:
-                case TOKEN_BOOL:
-                {
-                    textColour = { 179, 124, 225 };
-                } break;
-
-                case TOKEN_FUNCTION:
-                case TOKEN_CUSTOM_TYPE:
-                case TOKEN_DEFINE:
-                {
-                    textColour = { 25, 0, 255 };
-                } break;
-
-                case TOKEN_INBUILT_TYPE:
-                {
-                    textColour = { 0, 255, 255 };
-                } break;
-
-                case TOKEN_STRING:
-                {
-                    textColour = { 255, 255, 0 };
-                } break;
-
-                case TOKEN_COMMENT:
-                {
-                    textColour = { 180, 180, 180 };
-                } break;
-            }
-
+            
             char* text = editor.lines[currentLine].text;
 
             //Draw whitespace at front of line
 			if (t == 0 || currentLine != tokenInfo.tokens[t - 1].at.line)
 				x += TextPixelLength(text, token.at.textAt);
 
+            text += token.at.textAt;
+
             //Draw token
-			text += token.at.textAt;
+            Colour textColour = tokenColours[token.type];
             DrawText(text, x, y, textColour, textBounds, token.textLength);
             x += TextPixelLength(text, token.textLength);
 
