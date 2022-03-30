@@ -24,8 +24,8 @@ enum TypeOfToken
 
     TOKEN_COMMENT,
 
-    TOKEN_EOS,
     TOKEN_UNKNOWN,
+    TOKEN_EOS,
 
     NUM_TOKENS
 };

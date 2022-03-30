@@ -24,6 +24,8 @@
 #define HeapAllocZero(type, numEls) (type*)calloc((numEls), sizeof(type))
 #define HeapRealloc(type, arr, numEls) (type*)realloc(arr, (numEls) * sizeof(type))
 
+#define INTROSPECT(introspectFunctionName)
+
 #define PIXEL_IN_BYTES 4
 #define FONT_SIZE 13
 

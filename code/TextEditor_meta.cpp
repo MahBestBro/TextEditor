@@ -1,0 +1,23 @@
+MemberMetaData UserSettingsMemberMetaData[] =
+{
+    {TYPE_Colour, StructOffset(UserSettings, backgroundColour)},
+    {TYPE_Colour, StructOffset(UserSettings, lineNumColour)},
+    {TYPE_Colour, StructOffset(UserSettings, cursorColour)},
+    {TYPE_ColourRGBA, StructOffset(UserSettings, highlightColour)},
+    {TYPE_Colour, StructOffset(UserSettings, defaultTextColour)},
+    {TYPE_Colour, StructOffset(UserSettings, punctuationColour)},
+    {TYPE_Colour, StructOffset(UserSettings, operatorColour)},
+    {TYPE_Colour, StructOffset(UserSettings, stringColour)},
+    {TYPE_Colour, StructOffset(UserSettings, numberColour)},
+    {TYPE_Colour, StructOffset(UserSettings, boolColour)},
+    {TYPE_Colour, StructOffset(UserSettings, identifierColour)},
+    {TYPE_Colour, StructOffset(UserSettings, functionColour)},
+    {TYPE_Colour, StructOffset(UserSettings, customTypeColour)},
+    {TYPE_Colour, StructOffset(UserSettings, inbuiltTypeColour)},
+    {TYPE_Colour, StructOffset(UserSettings, keywordColour)},
+    {TYPE_Colour, StructOffset(UserSettings, preprocessorColour)},
+    {TYPE_Colour, StructOffset(UserSettings, defineColour)},
+    {TYPE_Colour, StructOffset(UserSettings, commentColour)},
+    {TYPE_Colour, StructOffset(UserSettings, unknownColour)},
+    {TYPE_Colour, StructOffset(UserSettings, tokenColours)},
+};

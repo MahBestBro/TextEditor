@@ -1793,28 +1793,6 @@ void Draw(float dt)
 	    	         { 0, 0, yBottomLimit, 0 });
         }
 
-        //TODO: Move this into UserSettings and get rid of code generation (knew it was a shit idea)
-        Colour tokenColours[NUM_TOKENS] = 
-        {
-            userSettings.punctuationColour,
-            userSettings.operatorColour,
-
-            userSettings.stringColour,
-            userSettings.numberColour,
-            userSettings.boolColour,
-            userSettings.identifierColour,
-            userSettings.functionColour,
-            userSettings.customTypeColour,
-            userSettings.inbuiltTypeColour,
-            userSettings.keywordColour,
-            userSettings.preprocessorColour,
-            userSettings.defineColour,
-            
-            userSettings.commentColour,
-            {0},
-            userSettings.unknownColour
-        };
-
         int x = 0;
         for (int t = 0; t < tokenInfo.numTokens; ++t)
         {
@@ -1835,7 +1813,7 @@ void Draw(float dt)
             text += token.at.textAt;
 
             //Draw token
-            Colour textColour = tokenColours[token.type];
+            Colour textColour = userSettings.tokenColours[token.type];
             DrawText(text, x, y, textColour, textBounds, token.textLength);
             x += TextPixelLength(text, token.textLength);
 

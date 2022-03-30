@@ -18,22 +18,17 @@ rem -FC uses full path for error and warning messages
 rem IGNORED WARNINGS:
 rem - 4100: Unused function parameters (does not work with winmain or win32 callback)
 rem - 4201: non-standard anonymous struct or union (we use them) 
- 
 
-mkdir config_code_generator 
+
+
 cls
-pushd config_code_generator 
-
-rem Config Preprocessor
 del *.pdb > NUL 2> NUL
-cl  %commonCompilerFlags% /EHsc ../code/TextEditor_config_code_generator.cpp /I %includeDirs% /link %commonLinkerFlags% -libpath:"../lib" %libraries% /out:TextEditor_config_code_generator.exe
-TextEditor_config_code_generator.exe
 
-popd
-
+rem Introspection
+cl  %commonCompilerFlags% /EHsc code\TextEditor_introspect.cpp /link %commonLinkerFlags% -libpath:"lib" %libraries% /out:TextEditor_introspect.exe  
+TextEditor_introspect.exe
 
 rem Debug build
-del *.pdb > NUL 2> NUL
 cl  %commonCompilerFlags% /EHsc code\TextEditor_win32.cpp /I %includeDirs% /link %commonLinkerFlags% -libpath:"lib" %libraries% /out:TextEditor.exe  
 
 

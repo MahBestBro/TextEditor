@@ -6,8 +6,6 @@
 #include "TextEditor_meta.h"
 #include "TextEditor_config.h"
 
-#include "TextEditor_user_settings_memberData.inc"
-
 char* AdvanceOnePastChar(char* str, char target, __Out int* len = 0)
 {
     int resultLen = 0;
@@ -47,12 +45,12 @@ UserSettings LoadUserSettingsFromConfigFile()
     char** lines = SplitStringByLines(file, &numLines);
     for (int i = 0; i < numLines; ++i)
     {
-        UserSettingsMemberMetaData memberData = memberMetaData[i];
+        MemberMetaData memberData = UserSettingsMemberMetaData[i];
         char* val = AdvanceOnePastChar(lines[i], ' ');
 
         switch(memberData.type)
         {
-            case TYPE_COLOUR_RGB:
+            case TYPE_Colour:
             {
                 Colour colour;
 
@@ -77,7 +75,7 @@ UserSettings LoadUserSettingsFromConfigFile()
                 *(Colour*)MemberPtr(result, memberData.offset) = colour;
             } break;
 
-            case TYPE_COLOUR_RGBA:
+            case TYPE_ColourRGBA:
             {
                 ColourRGBA colour;
 
@@ -107,17 +105,12 @@ UserSettings LoadUserSettingsFromConfigFile()
                 *(ColourRGBA*)MemberPtr(result, memberData.offset) = colour;
             } break;
 
-            case TYPE_INT:
+            case TYPE_int:
             {
                 UNIMPLEMENTED("TODO: Implement once needed")
             } break;
 
-            case TYPE_BOOL:
-            {
-                UNIMPLEMENTED("TODO: Implement once needed")
-            } break;
-
-            case TYPE_STRING:
+            case TYPE_bool:
             {
                 UNIMPLEMENTED("TODO: Implement once needed")
             } break;
