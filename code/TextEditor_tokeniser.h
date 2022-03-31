@@ -46,11 +46,14 @@ struct Token
 
 struct TokenInfo
 {
-    Token tokens[MAX_LINES];
-    int numTokens;
+    Token* tokens = NULL;
+    int size = 256;
+    int numTokens = 0;
 };
 
+TokenInfo InitTokenInfo();
 void Tokenise(TokenInfo* dest);
 TokenInfo TokeniseLine(Line code, int lineIndex, MultilineState* multilineState);
+
 
 #endif

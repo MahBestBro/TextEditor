@@ -2,13 +2,12 @@ There's no strict order but generally speaking the closer to the top the more im
 
 FEATURES: 
     - Brighten up current line?
-    - Syntax highlighting
     - Wrap Text
     - Find and Replace
     - The rest of the default commands (do some research)
     - Mutiple tabs
     - Multiline cursor
-    - Customisation for inputs if not too tedious
+    - Customisation for syntax highlighting and inputs if not too tedious
     - UI?
     - Terminal?
 
@@ -27,9 +26,15 @@ LIST OF COMMANDS TO IMPLEMENT:
     - Ctrl+Shift+Q: Closes Window
 
 PROGRAMMING/REFACTORING:
+    - Idea for syntax highlighting customisation
+        - have tokenisers be something user compiles (give demo one though)
+        - have bindings for strings and chars to colours
+    - have tokeniser only produce tokens for what's on screen 
     - Consider removing editor moving side effects from functions?
     - Consider moving away from c-string (i.e., make string lib or find good string lib)
+    - Start using custom and local allocators instead of malloc all the time
     - Have a function that can map a callback function to an input
         - Pass in inputcode and function pointer which'll be mapped to input.
         - Add optional repeat option which adds timed event.
     - Refactor timed events, make them neater and more flexibe if possible?
+    

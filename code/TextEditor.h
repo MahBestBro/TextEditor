@@ -125,11 +125,13 @@ ResizeDynamicArray(&arr, len, sizeof(val), &size)   \
 //NOTE: Always call this before you add to the array or else you will lose any elements whose index > size
 inline void ResizeDynamicArray(void* ptrToArr, int len, size_t elSize, int* size)
 {
+    bool shouldRealloc = false;
     while (len >= *size)
     {
+        shouldRealloc = true;
         *size *= 2;
-        *(void**)ptrToArr = realloc(*(void**)ptrToArr, *size * elSize);
     }
+    if (shouldRealloc) *(void**)ptrToArr = realloc(*(void**)ptrToArr, *size * elSize); 
 }
 
 void Init();

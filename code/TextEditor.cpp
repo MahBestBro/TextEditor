@@ -96,13 +96,6 @@ bool KeyCommandDown(KeyCommand keyCommand)
     return commandKeyDown && (heldInitialKeys == keyCommand.initialHeldKeys);
 }
 
-#define QuickSort(arr, len, elSize) qsort(arr, len, elSize, _qsortCompare)
-
-int _qsortCompare(const void* a, const void* b)
-{
-    return (*(int*)a - *(int*)b);
-}
-
 int TextPixelLength(char* text, int len)
 {
     int result = 0;
@@ -1421,6 +1414,8 @@ void OpenFile()
 
         editor.topChangedLineIndex = -1;
         editor.cursorPos = {0, 0};
+
+        Tokenise(&tokenInfo);
     }
 }
 
@@ -1488,11 +1483,10 @@ internal UserSettings userSettings;
 void Init()
 {
     for (int i = 0; i < MAX_LINES; ++i)
-    {
         editor.lines[i] = InitLine();
-    }
 
     userSettings = LoadUserSettingsFromConfigFile();
+    tokenInfo = InitTokenInfo();
 }
 
 void Draw(float dt)

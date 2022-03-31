@@ -459,6 +459,13 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
     return result;
 }*/
 
+TokenInfo InitTokenInfo()
+{
+    TokenInfo result;
+    result.tokens = HeapAlloc(Token, result.size);
+    return result;
+}
+
 void Tokenise(TokenInfo* dest)
 {
     Assert(editor.numLines < MAX_LINES);
@@ -475,7 +482,7 @@ void Tokenise(TokenInfo* dest)
         while (parsing)
         {
             Token token = GetTokenFromLine(editor.lines[i], i, &lineAt, &multilineState);
-            dest->tokens[dest->numTokens++] = token;
+            AppendToDynamicArray(dest->tokens, dest->numTokens, token, dest->size);
             parsing = (lineAt != editor.lines[i].len);
         }
     }
