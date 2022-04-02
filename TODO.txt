@@ -37,4 +37,7 @@ PROGRAMMING/REFACTORING:
         - Pass in inputcode and function pointer which'll be mapped to input.
         - Add optional repeat option which adds timed event.
     - Refactor timed events, make them neater and more flexibe if possible?
+
+BUG FIXES:
+    - Fix bug where mouse input that happens outside of window does not get updated
     

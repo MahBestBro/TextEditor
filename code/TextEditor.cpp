@@ -655,7 +655,7 @@ void InsertText(char** textAsLines, TextSectionInfo sectionInfo)
     SetTopChangedLine(sectionInfo.top.line);
 }
 
-void SaveFile(char* fileName, size_t fileNameLen)
+void SaveFile(char* fileName, int fileNameLen)
 {
     if (editor.topChangedLineIndex == -1) return; 
 
@@ -1383,14 +1383,15 @@ void CutHighlightedText()
 //TODO: Resize editor.lines if file too big + maybe return success bool?
 void OpenFile()
 {
-    size_t fileNameLen = 0;
+    int fileNameLen = 0;
     char* fileName = ShowFileDialogAndGetFileName(false, &fileNameLen);
     char* file = ReadEntireFile(fileName);
     if (file)
     {
-        editor.fileName = HeapAlloc(char, fileNameLen + 1);
+        editor.fileName = HeapAlloc(char, fileNameLen);
         memcpy(editor.fileName, fileName, fileNameLen);
         editor.fileName[fileNameLen] = 0;
+        editor.fileNameLen = fileNameLen;
 
         int numLines = 0;
         char** fileLines = SplitStringByLines(file, &numLines);
@@ -1421,7 +1422,7 @@ void OpenFile()
 
 void SaveAs()
 {
-	size_t fileNameLen = 0;
+	int fileNameLen = 0;
 	char* fileName = ShowFileDialogAndGetFileName(true, &fileNameLen);
     SaveFile(fileName, fileNameLen);
 }
@@ -1775,6 +1776,7 @@ void Draw(float dt)
     Rect textBounds = {start.x, xRightLimit, yBottomLimit, 0};
 
     //Draw all of the text on screen
+    if (IsTokenisable(editor.fileName, editor.fileNameLen))
     {
 	    const int lineNumOffset = (fontChars[' '].advance) * 4;
         //Draw first number always just in case there's no text at all
@@ -1802,7 +1804,18 @@ void Draw(float dt)
 
             //Draw whitespace at front of line
 			if (t == 0 || currentLine != tokenInfo.tokens[t - 1].at.line)
+            {
 				x += TextPixelLength(text, token.at.textAt);
+
+                //Draw Line num
+                char lineNumText[8]; //TODO: Calculate how many lines we want max cause fucking ey this will likely go to shit
+                IntToString(currentLine + 1, lineNumText);
+                DrawText(lineNumText, 
+                         start.x - lineNumOffset, 
+                         y, 
+                         userSettings.lineNumColour, 
+                         {0, 0, yBottomLimit, 0});
+            }
 
             text += token.at.textAt;
 
@@ -1820,19 +1833,29 @@ void Draw(float dt)
                 DrawText(text, x, y, textColour, textBounds, remainderLength);
                 x += TextPixelLength(text, remainderLength);
             }
-
-            //Draw Line num
-            char lineNumText[8]; //TODO: Calculate how many lines we want max cause fucking ey this will likely go to shit
-            IntToString(currentLine + 1, lineNumText);
-            DrawText(lineNumText, 
-                     start.x - lineNumOffset, 
-                     y, 
-                     userSettings.lineNumColour, 
-                     {0, 0, yBottomLimit, 0});
-
-
         }
     }
+    else
+    {
+        for (int i = 0; i < editor.numLines; ++i)
+        {
+            //Draw text
+            int x = start.x - editor.textOffset.x;
+            int y = start.y - i * CURSOR_HEIGHT + editor.textOffset.y;
+            DrawText(editor.lines[i].text, x, y, userSettings.defaultTextColour, textBounds);
+
+            //Draw Line num
+            char lineNumText[8];
+            IntToString(i + 1, lineNumText);
+            int lineNumOffset = (fontChars[' '].advance) * 4;
+            DrawText(lineNumText, 
+                        start.x - lineNumOffset, 
+                        y, 
+                        userSettings.lineNumColour, 
+                        {0, 0, yBottomLimit, 0});
+        }
+    }
+    
 
     //Draw highlighted text
     if (editor.highlightStart.textAt != -1) 

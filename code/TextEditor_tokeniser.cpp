@@ -466,6 +466,20 @@ TokenInfo InitTokenInfo()
     return result;
 }
 
+bool IsTokenisable(char* fileName, int fileNameLen)
+{
+    for (int i = fileNameLen - 1; i >= 0; --i)
+    {
+        if (fileName[i] == '.')
+        {
+            //TODO: Cleanup once we have string lib
+            return CompareStrings(fileName + i + 1, fileNameLen - i - 1, "cpp", 3) ||
+                   CompareStrings(fileName + i + 1, fileNameLen - i - 1, "c", 1);
+        }
+    }
+    return false;
+}
+
 void Tokenise(TokenInfo* dest)
 {
     Assert(editor.numLines < MAX_LINES);

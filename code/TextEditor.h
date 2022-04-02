@@ -99,6 +99,7 @@ inline bool operator !=(EditorPos lhs, EditorPos rhs)
 struct Editor
 {
     char* fileName = nullptr;
+    int fileNameLen = 0;
 
     char currentChar = 0;
     Line lines[MAX_LINES];
@@ -154,6 +155,6 @@ bool WriteToFile(char* fileName, char* text, uint64 textLen, bool overwrite, int
 void CopyToClipboard(const char* text, size_t len);
 char* GetClipboardText();
 
-char* ShowFileDialogAndGetFileName(bool save, size_t* fileNameLen = 0);
+char* ShowFileDialogAndGetFileName(bool save, int* fileNameLen = 0);
 
 #endif

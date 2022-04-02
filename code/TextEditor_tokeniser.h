@@ -52,8 +52,8 @@ struct TokenInfo
 };
 
 TokenInfo InitTokenInfo();
+bool IsTokenisable(char* fileName, int fileNameLen);
 void Tokenise(TokenInfo* dest);
-TokenInfo TokeniseLine(Line code, int lineIndex, MultilineState* multilineState);
 
 
 #endif

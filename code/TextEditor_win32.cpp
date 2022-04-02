@@ -215,7 +215,7 @@ char* GetClipboardText()
     return result;
 }
 
-char* ShowFileDialogAndGetFileName(bool save, size_t* fileNameLen)
+char* ShowFileDialogAndGetFileName(bool save, int* fileNameLen)
 {
     char* result = nullptr;
 
@@ -238,7 +238,7 @@ char* ShowFileDialogAndGetFileName(bool save, size_t* fileNameLen)
     BOOL succeeded = (save) ? GetSaveFileName(&ofn) : GetOpenFileName(&ofn);
     if (succeeded)
     {
-        size_t len = wcslen(chosenFileName);
+        int len = (int)wcslen(chosenFileName);
         result = HeapAlloc(char, len + 1);
         wcstombs_s(0, result, len + 1, chosenFileName, len);
         result[len] = 0;
