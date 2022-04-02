@@ -1,6 +1,87 @@
 #include <windows.h>
 #include "TextEditor_defs.h"
+#include "TextEditor_string.h"
 #include "TextEditor.h"
+
+string cstring(char* cstr)
+{
+    string result;
+    result.str = cstr;
+    result.len = StringLen(cstr);
+    return result;
+}
+
+bool operator==(string lhs, string rhs)
+{
+    if (lhs.len != rhs.len) return false;
+
+    for (int i = 0; i < lhs.len; ++i)
+        if (lhs[i] != rhs[i]) return false;
+    
+    return true;
+}
+
+string SubString(string s, int start, int end)
+{
+    string result = s;
+    result.str += start;
+    result.len = ((end == -1) ? s.len : end ) - start;
+    return result;
+}    
+
+bool StringContains(string s, string target)
+{
+    if (s.len < target.len) return false;
+
+	for (int i = 0; i < s.len; ++i)
+	{
+		if (s[i] == target[0] && SubString(s, i, i + (int)target.len) == target)
+			return true;
+	}
+
+    return false;
+}
+
+int IndexOfCharInString(string s, char target)
+{
+    for (int i = 0; i < s.len; ++i)
+    {
+        if (s[i] == target) return i;
+    }
+    return -1;
+}
+
+int IndexOfLastCharInString(string s, char target)
+{
+    for (int i = s.len - 1; i >= 0; --i)
+    {
+        if (s[i] == target) return i;
+    }
+    return -1;
+}
+
+void string_buf::dealloc()
+{
+    free(str);
+    len = 0;
+    cap = 0;
+}
+
+char* string_buf::cstr()
+{
+    char* result = (char*)malloc(len + 1);
+    memcpy(result, str, len);
+    result[len] = 0;
+    return result;
+}
+
+string_buf init_string_buf(string s, size_t capacity = 0)
+{ 
+    string_buf result = {0, (size_t)s.len, (capacity) ? capacity : s.len};
+    result.str = (char*)malloc(result.cap);
+    memcpy(result.str, s.str, s.len);
+    return result;
+}
 
 void IntToString(int val, char* buffer)
 {
@@ -44,7 +125,7 @@ int StringToInt(char* str, int len, bool* success)
         if (digit < 0 || digit > 9)
         {
             if (success) *success = false;
-            return -1;
+            return 0;
         }
             
         result += digit * powOf10;

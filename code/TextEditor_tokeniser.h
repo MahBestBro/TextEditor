@@ -1,5 +1,6 @@
 #include "TextEditor_defs.h"
 #include "TextEditor.h"
+#include "TextEditor_string.h"
 
 #ifndef TEXT_EDITOR_TOKENISER_H
 #define TEXT_EDITOR_TOKENISER_H
@@ -52,7 +53,7 @@ struct TokenInfo
 };
 
 TokenInfo InitTokenInfo();
-bool IsTokenisable(char* fileName, int fileNameLen);
+bool IsTokenisable(string fileName);
 void Tokenise(TokenInfo* dest);
 
 

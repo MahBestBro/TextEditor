@@ -115,7 +115,8 @@ void AddTypeNameForTypedef(EditorPos at)
 
 Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
 {
-    //EatWhitespaceAndComments(tokeniser);
+    if (code.len == 0) return {{0, lineIndex}, -1, TOKEN_UNKNOWN};
+
 	int _at = *at;
 	while (IsWhiteSpace(code.text[_at]) && _at < code.len) ++_at;
 
@@ -139,8 +140,11 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
         "if", 
         "else", 
         "for", 
+        "do",
         "while", 
-        "typedef"
+        "typedef",
+        "inline",
+        "extern"
     };
 
     char* preprocessorTags[] = 
@@ -151,7 +155,8 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
         "#elif", 
         "#else", 
         "#ifdef", 
-        "#ifndef"
+        "#ifndef",
+        "#endif"
     };
 
     Token token = {};
@@ -225,6 +230,7 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
         case '}':  
         case ',':   
         case '.':   
+        case '\\':   
             token.type = TOKEN_PUNCTUATION; 
             break;
  
@@ -270,7 +276,7 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
 					*ms = MS_COMMENT;
 
                 token.type = TOKEN_COMMENT;
-				token.textLength = code.len;
+				token.textLength = code.len - _at + 1;
                 _at = code.len;   
             }
         } break;
@@ -466,16 +472,22 @@ TokenInfo InitTokenInfo()
     return result;
 }
 
-bool IsTokenisable(char* fileName, int fileNameLen)
+string tokenisableFileExtensions[] 
 {
-    for (int i = fileNameLen - 1; i >= 0; --i)
+    cstring("cpp"),
+    cstring("c"), 
+    cstring("h") 
+};
+
+bool IsTokenisable(string fileName)
+{
+    int dotIndex = IndexOfLastCharInString(fileName, '.');
+    if (dotIndex == -1) return false;
+
+    string extension = SubString(fileName, dotIndex + 1);    
+    for (int j = 0; j < StackArrayLen(tokenisableFileExtensions); ++j)
     {
-        if (fileName[i] == '.')
-        {
-            //TODO: Cleanup once we have string lib
-            return CompareStrings(fileName + i + 1, fileNameLen - i - 1, "cpp", 3) ||
-                   CompareStrings(fileName + i + 1, fileNameLen - i - 1, "c", 1);
-        }
+        if (extension == tokenisableFileExtensions[j]) return true;
     }
     return false;
 }

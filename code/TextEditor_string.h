@@ -1,6 +1,98 @@
 #ifndef TEXT_EDITOR_STRING_H
 #define TEXT_EDITOR_STRING_H
 
+struct string
+{
+    char* str;
+    int len;
+
+    char operator[](int index) { return str[index]; }
+};
+
+string cstring(char* cstr);
+
+bool operator==(string lhs, string rhs);
+inline bool operator==(char* lhs, string rhs) { return cstring(lhs) == rhs; }
+inline bool operator==(string lhs, char* rhs) { return lhs == cstring(rhs); }
+
+inline bool operator!=(string lhs, string rhs) { return !(lhs == rhs); }
+inline bool operator!=(char* lhs, string rhs) { return !(lhs == rhs); }
+inline bool operator!=(string lhs, char* rhs) { return !(lhs == rhs); }
+
+inline bool cstrEquals(char* lhs, char* rhs) { return cstring(lhs) == cstring(rhs); }
+
+string SubString(string s, int start, int end = -1);
+inline string SubString(char* cstr, int start, int end = -1)
+{
+    return SubString(cstring(cstr), start, end);
+}
+
+bool StringContains(string s, string target);
+inline bool StringContains(char* cstr, string target) 
+{ 
+    return StringContains(cstring(cstr), target); 
+}
+inline bool StringContains(string s, char* target_cstr) 
+{ 
+    return StringContains(s, cstring(target_cstr)); 
+}
+inline bool StringContains(char* cstr, char* target_cstr) 
+{ 
+    return StringContains(cstring(cstr), cstring(target_cstr)); 
+}
+
+int IndexOfCharInString(string s, char target);
+inline int IndexOfCharInString(char* s, char target) 
+{ 
+    return IndexOfCharInString(cstring(s), target);
+}
+int IndexOfLastCharInString(string s, char target);
+inline int IndexOfLastCharInString(char* s, char target) 
+{ 
+    return IndexOfLastCharInString(cstring(s), target);
+}
+
+struct string_buf
+{
+    char* str;
+    size_t len;
+    size_t cap;
+
+    char operator[](int index) { return str[index]; }
+
+    void operator+=(string s)
+    {
+        len += s.len;
+        ResizeDynamicArray(&str, len, 1, &cap);
+        memcpy(str + len - s.len, s.str, s.len);
+    }
+    void operator+=(char* s) { *this += cstring(s); }
+
+    void operator=(string s)
+    {
+        len = s.len;
+        cap = max(cap, s.len);
+        memcpy(str, s.str, s.len);
+    }
+    void operator=(char* s) { *this = cstring(s); }
+
+    void dealloc();
+
+    inline string toStr()
+    {
+        return string{str, (int)len};
+    }
+
+    char* cstr();
+};
+
+string_buf init_string_buf(string s, int capacity);
+inline string_buf init_string_buf(char* cstr, int capacity = -1)
+{
+    return init_string_buf(cstring(cstr), capacity);
+}
+
+
 inline int StringLen(const char* string)
 {
     int result = 0;

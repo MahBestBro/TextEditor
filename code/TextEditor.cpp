@@ -1776,7 +1776,7 @@ void Draw(float dt)
     Rect textBounds = {start.x, xRightLimit, yBottomLimit, 0};
 
     //Draw all of the text on screen
-    if (IsTokenisable(editor.fileName, editor.fileNameLen))
+    if (IsTokenisable({editor.fileName, editor.fileNameLen}))
     {
 	    const int lineNumOffset = (fontChars[' '].advance) * 4;
         //Draw first number always just in case there's no text at all
