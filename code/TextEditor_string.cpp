@@ -1,4 +1,3 @@
-#include <windows.h>
 #include "TextEditor_defs.h"
 #include "TextEditor_string.h"
 #include "TextEditor.h"
@@ -8,6 +7,14 @@ string cstring(char* cstr)
     string result;
     result.str = cstr;
     result.len = StringLen(cstr);
+    return result;
+}
+
+char* string::cstring()
+{
+    char* result = HeapAlloc(char, len + 1);
+    memcpy(result, str, len);
+    result[len] = 0;
     return result;
 }
 
@@ -60,6 +67,17 @@ int IndexOfLastCharInString(string s, char target)
     return -1;
 }
 
+bool CharInString(char c, string s)
+{
+    for (int i = 0; i < s.len; ++i)
+    {
+        if (s[i] == c) return true;
+    }
+    return false;
+}
+
+
+
 void string_buf::dealloc()
 {
     free(str);
@@ -75,7 +93,7 @@ char* string_buf::cstr()
     return result;
 }
 
-string_buf init_string_buf(string s, size_t capacity = 0)
+string_buf init_string_buf(string s, size_t capacity)
 { 
     string_buf result = {0, (size_t)s.len, (capacity) ? capacity : s.len};
     result.str = (char*)malloc(result.cap);

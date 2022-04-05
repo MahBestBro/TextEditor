@@ -3,6 +3,7 @@
 
 #include "TextEditor_defs.h"
 #include "TextEditor_input.h"
+#include "TextEditor_string.h"
 
 #ifndef TEXT_EDITOR_H
 #define TEXT_EDITOR_H
@@ -98,8 +99,9 @@ inline bool operator !=(EditorPos lhs, EditorPos rhs)
 
 struct Editor
 {
-    char* fileName = nullptr;
-    int fileNameLen = 0;
+    string_buf fileName;
+    //char* fileName = nullptr;
+    //int fileNameLen = 0;
 
     char currentChar = 0;
     Line lines[MAX_LINES];
@@ -119,33 +121,6 @@ struct Editor
     IntPair textOffset = {};
 };
 
-#define AppendToDynamicArray(arr, len, val, size)   \
-(arr)[(len)++] = (val);                             \
-ResizeDynamicArray(&arr, len, sizeof(val), &size)   \
-
-//NOTE: Always call this before you add to the array or else you will lose any elements whose index > size
-inline void ResizeDynamicArray(void* ptrToArr, size_t len, size_t elSize, int* size)
-{
-    bool shouldRealloc = false;
-    while (len >= *size)
-    {
-        shouldRealloc = true;
-        *size *= 2;
-    }
-    if (shouldRealloc) *(void**)ptrToArr = realloc(*(void**)ptrToArr, *size * elSize); 
-}
-
-inline void ResizeDynamicArray(void* ptrToArr, size_t len, size_t elSize, size_t* size)
-{
-    bool shouldRealloc = false;
-    while (len >= *size)
-    {
-        shouldRealloc = true;
-        *size *= 2;
-    }
-    if (shouldRealloc) *(void**)ptrToArr = realloc(*(void**)ptrToArr, *size * elSize); 
-}
-
 void Init();
 void Draw(float dt);
 void Print(const char* message);
@@ -161,7 +136,7 @@ inline void* dbg_malloc(size_t size, const char* file, int line)
 void FreeWin32(void* memory);
 
 char* ReadEntireFile(char* fileName, uint32* fileLen  = nullptr);
-bool WriteToFile(char* fileName, char* text, uint64 textLen, bool overwrite, int32 writeStart = 0);
+bool WriteToFile(char* fileNameCStr, char* text, uint64 textLen, bool overwrite, int32 writeStart = 0);
 
 void CopyToClipboard(const char* text, size_t len);
 char* GetClipboardText();

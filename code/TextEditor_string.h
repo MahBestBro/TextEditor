@@ -1,5 +1,9 @@
+#include "TextEditor_dynarray.h"
+
 #ifndef TEXT_EDITOR_STRING_H
 #define TEXT_EDITOR_STRING_H
+
+#define lstring(l_str) string{l_str, sizeof(l_str) - 1}
 
 struct string
 {
@@ -7,6 +11,8 @@ struct string
     int len;
 
     char operator[](int index) { return str[index]; }
+
+    char* cstring();
 };
 
 string cstring(char* cstr);
@@ -52,6 +58,12 @@ inline int IndexOfLastCharInString(char* s, char target)
     return IndexOfLastCharInString(cstring(s), target);
 }
 
+bool CharInString(char c, string s);
+inline bool CharInString(char c, char* s)
+{
+    return CharInString(c, cstring(s));
+}
+
 struct string_buf
 {
     char* str;
@@ -86,8 +98,8 @@ struct string_buf
     char* cstr();
 };
 
-string_buf init_string_buf(string s, int capacity);
-inline string_buf init_string_buf(char* cstr, int capacity = -1)
+string_buf init_string_buf(string s, size_t capacity = 0);
+inline string_buf init_string_buf(char* cstr, size_t capacity = 0)
 {
     return init_string_buf(cstring(cstr), capacity);
 }

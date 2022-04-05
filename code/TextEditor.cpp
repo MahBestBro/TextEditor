@@ -9,6 +9,7 @@
 #define TEXT_X_OFFSET 52
 #define CURSOR_HEIGHT 18
 #define PIXELS_UNDER_BASELINE 5
+#define LINE_NUM_OFFSET ((fontChars[' '].advance) * 4)
 
 extern Input input;
 extern FontChar fontChars[128];
@@ -250,18 +251,13 @@ void Draw8bppPixels(Rect rect, byte* pixels, int stride, Colour colour, Rect lim
 }
 
 //TODO: Make this non c-string dependent
-void DrawText(char* text, int xCoord, int yCoord, Colour colour, Rect limits = {0}, int textLen = -1)
-{
-    char* at = text; 
+void DrawText(string text, int xCoord, int yCoord, Colour colour, Rect limits = {0})
+{ 
 	int xAdvance = 0;
     int yAdvance = 0;
-
-    int numAdvances = 0;
-    for (; at[0]; at++)
+    for (int i = 0; i < text.len; i++)
     {
-        if (numAdvances == textLen) break;
-
-        FontChar fc = fontChars[at[0]];
+        FontChar fc = fontChars[text[i]];
         int xOffset = fc.left + xAdvance + xCoord;
         int yOffset = yCoord - (fc.height - fc.top) - yAdvance;
         Rect charDims = {xOffset, (int)(xOffset + fc.width), yOffset, (int)(yOffset + fc.height)};
@@ -269,8 +265,6 @@ void DrawText(char* text, int xCoord, int yCoord, Colour colour, Rect limits = {
         Draw8bppPixels(charDims, (byte*)fc.pixels, fc.width, colour, limits);
 
 		xAdvance += fc.advance;
-
-        numAdvances++;
     }
 }
 
@@ -655,18 +649,18 @@ void InsertText(char** textAsLines, TextSectionInfo sectionInfo)
     SetTopChangedLine(sectionInfo.top.line);
 }
 
-void SaveFile(char* fileName, int fileNameLen)
+void SaveFile(string fileName)
 {
     if (editor.topChangedLineIndex == -1) return; 
 
-	bool overwrite = fileName && editor.fileName && (strcmp(fileName, editor.fileName) == 0);
+	bool overwrite = fileName == editor.fileName.toStr();
     
     size_t textToWriteLen = 0;
     int32 writeStart = 0;
     for (int i = 0; i < editor.numLines; ++i)
     {
         //TODO: Make UNIX compatible
-        if (i >= editor.topChangedLineIndex)
+        if (i >= editor.topChangedLineIndex || !overwrite)
             textToWriteLen += editor.lines[i].len + 2 * (i != editor.numLines - 1);
         else
         {
@@ -677,7 +671,7 @@ void SaveFile(char* fileName, int fileNameLen)
 
     char* textToWrite = HeapAlloc(char, textToWriteLen + 1);
     uint64 at = 0;
-    for (int i = editor.topChangedLineIndex; i < editor.numLines; ++i)
+    for (int i = editor.topChangedLineIndex * (overwrite); i < editor.numLines; ++i)
     {
         memcpy(textToWrite + at, editor.lines[i].text, editor.lines[i].len);
         at += editor.lines[i].len;
@@ -691,22 +685,18 @@ void SaveFile(char* fileName, int fileNameLen)
     }
     textToWrite[textToWriteLen] = 0;
     
-    if(WriteToFile(fileName, textToWrite, textToWriteLen, overwrite, writeStart))
+    char* fileNameCStr = fileName.cstring();
+    if(WriteToFile(fileNameCStr, textToWrite, textToWriteLen, overwrite, writeStart))
     {
-        if (!overwrite)
-        {
-            editor.fileName = HeapRealloc(char, editor.fileName, fileNameLen + 1);
-            memcpy(editor.fileName, fileName, fileNameLen);
-            editor.fileName[fileNameLen] = 0;
-        }
+        if (!overwrite) editor.fileName = fileName;
     }
     else
     {
         //Log
     }
 
+    free(fileNameCStr);
     free(textToWrite);
-    free(fileName);
 
     editor.topChangedLineIndex = -1;
 }
@@ -1388,10 +1378,7 @@ void OpenFile()
     char* file = ReadEntireFile(fileName);
     if (file)
     {
-        editor.fileName = HeapAlloc(char, fileNameLen);
-        memcpy(editor.fileName, fileName, fileNameLen);
-        editor.fileName[fileNameLen] = 0;
-        editor.fileNameLen = fileNameLen;
+        editor.fileName = fileName;
 
         int numLines = 0;
         char** fileLines = SplitStringByLines(file, &numLines);
@@ -1424,13 +1411,13 @@ void SaveAs()
 {
 	int fileNameLen = 0;
 	char* fileName = ShowFileDialogAndGetFileName(true, &fileNameLen);
-    SaveFile(fileName, fileNameLen);
+    SaveFile(string{fileName, fileNameLen});
 }
 
 void Save()
 {
-    if (editor.fileName)
-		SaveFile(editor.fileName, StringLen(editor.fileName));
+    if (editor.fileName.len > 0)
+		SaveFile(editor.fileName.toStr());
 	else
     {
         Assert(editor.topChangedLineIndex != -1);
@@ -1485,8 +1472,11 @@ void Init()
 {
     for (int i = 0; i < MAX_LINES; ++i)
         editor.lines[i] = InitLine();
+    
+    editor.fileName = init_string_buf("");
 
     userSettings = LoadUserSettingsFromConfigFile();
+    
     tokenInfo = InitTokenInfo();
 }
 
@@ -1776,62 +1766,62 @@ void Draw(float dt)
     Rect textBounds = {start.x, xRightLimit, yBottomLimit, 0};
 
     //Draw all of the text on screen
-    if (IsTokenisable({editor.fileName, editor.fileNameLen}))
+    if (IsTokenisable(editor.fileName.toStr()))
     {
-	    const int lineNumOffset = (fontChars[' '].advance) * 4;
         //Draw first number always just in case there's no text at all
-        if (tokenInfo.numTokens == 0)
-        {
-	        DrawText("1",
-	    	         start.x - lineNumOffset,
-	    	         start.y - editor.textOffset.y,
-	    	         userSettings.lineNumColour,
-	    	         { 0, 0, yBottomLimit, 0 });
-        }
+	    DrawText(lstring("1"),
+	    	     start.x - LINE_NUM_OFFSET,
+	    	     start.y - editor.textOffset.y,
+	    	     userSettings.lineNumColour,
+	    	     { 0, 0, yBottomLimit, 0 });
 
         int x = 0;
         for (int t = 0; t < tokenInfo.numTokens; ++t)
         {
             Token token = tokenInfo.tokens[t];
             int currentLine = token.at.line; 
+			bool prevTokenOnSameLine = t > 0 && 
+                                       tokenInfo.tokens[t - 1].at.line == token.at.line;
+			bool nextTokenOnSameLine = t < tokenInfo.numTokens - 1 && 
+                                       tokenInfo.tokens[t + 1].at.line == token.at.line;
 
             //Draw text
-            if (t == 0 || tokenInfo.tokens[t - 1].at.line != token.at.line)
+            if (t == 0 || !prevTokenOnSameLine)
                 x = start.x - editor.textOffset.x;
             int y = start.y - currentLine * CURSOR_HEIGHT + editor.textOffset.y;
-            
-            char* text = editor.lines[currentLine].text;
 
             //Draw whitespace at front of line
-			if (t == 0 || currentLine != tokenInfo.tokens[t - 1].at.line)
+			if (!prevTokenOnSameLine)
             {
-				x += TextPixelLength(text, token.at.textAt);
+				x += TextPixelLength(editor.lines[currentLine].text, token.at.textAt);
 
                 //Draw Line num
                 char lineNumText[8]; //TODO: Calculate how many lines we want max cause fucking ey this will likely go to shit
                 IntToString(currentLine + 1, lineNumText);
-                DrawText(lineNumText, 
-                         start.x - lineNumOffset, 
+                DrawText(cstring(lineNumText), 
+                         start.x - LINE_NUM_OFFSET, 
                          y, 
                          userSettings.lineNumColour, 
                          {0, 0, yBottomLimit, 0});
             }
 
-            text += token.at.textAt;
+            //Cleanup once editor lines are string buffers
+            string text = {editor.lines[currentLine].text + token.at.textAt, token.textLength};
 
             //Draw token
             Colour textColour = userSettings.tokenColours[token.type];
-            DrawText(text, x, y, textColour, textBounds, token.textLength);
-            x += TextPixelLength(text, token.textLength);
+            DrawText(text, x, y, textColour, textBounds);
+            x += TextPixelLength(text.str, token.textLength);
 
             //Draw whitespace
-            if (t < tokenInfo.numTokens - 1)
+            if (t < tokenInfo.numTokens - 1 && token.textLength > 0 && nextTokenOnSameLine)
             {
-                text += token.textLength;
+                text.str += token.textLength;
                 int remainderLength = tokenInfo.tokens[t + 1].at.textAt - token.at.textAt 
                                       - token.textLength;
-                DrawText(text, x, y, textColour, textBounds, remainderLength);
-                x += TextPixelLength(text, remainderLength);
+                text.len = remainderLength;
+                DrawText(text, x, y, textColour, textBounds);
+                x += TextPixelLength(text.str, remainderLength);
             }
         }
     }
@@ -1840,19 +1830,20 @@ void Draw(float dt)
         for (int i = 0; i < editor.numLines; ++i)
         {
             //Draw text
+            //Cleanup once editor lines are string buffers
+            string lineText = {editor.lines[i].text, editor.lines[i].len};
             int x = start.x - editor.textOffset.x;
             int y = start.y - i * CURSOR_HEIGHT + editor.textOffset.y;
-            DrawText(editor.lines[i].text, x, y, userSettings.defaultTextColour, textBounds);
+            DrawText(lineText, x, y, userSettings.defaultTextColour, textBounds);
 
             //Draw Line num
             char lineNumText[8];
             IntToString(i + 1, lineNumText);
-            int lineNumOffset = (fontChars[' '].advance) * 4;
-            DrawText(lineNumText, 
-                        start.x - lineNumOffset, 
-                        y, 
-                        userSettings.lineNumColour, 
-                        {0, 0, yBottomLimit, 0});
+            DrawText(cstring(lineNumText), 
+                     start.x - LINE_NUM_OFFSET, 
+                     y, 
+                     userSettings.lineNumColour, 
+                     {0, 0, yBottomLimit, 0});
         }
     }
     

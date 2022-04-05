@@ -121,12 +121,12 @@ char* ReadEntireFile(char* fileName, uint32* fileLen)
     return result;
 }
 
-bool WriteToFile(char* fileName, char* text, uint64 textLen, bool overwrite, int32 writeStart)
+bool WriteToFile(char* fileNameCStr, char* text, uint64 textLen, bool overwrite, int32 writeStart)
 {
     bool result = false;
 
     DWORD creationDisposition = (overwrite) ? OPEN_EXISTING : CREATE_ALWAYS;
-    HANDLE fileHandle = CreateFileA(fileName, GENERIC_WRITE, 0, 0, creationDisposition, 0, 0);
+    HANDLE fileHandle = CreateFileA(fileNameCStr, GENERIC_WRITE, 0, 0, creationDisposition, 0, 0);
     if (fileHandle != INVALID_HANDLE_VALUE)
     {
         Assert(writeStart >= 0);
@@ -215,6 +215,7 @@ char* GetClipboardText()
     return result;
 }
 
+//TODO: This thing doesn't always work, it's probably going to suck but you may have to do it the reccomended way
 char* ShowFileDialogAndGetFileName(bool save, int* fileNameLen)
 {
     char* result = nullptr;
