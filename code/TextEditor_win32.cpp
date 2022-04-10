@@ -63,7 +63,61 @@ void FreeWin32(void* mem)
     VirtualFree(mem, 0, MEM_RELEASE);
 }
 
-char* ReadEntireFile(char* fileName, uint32* fileLen)
+string ReadEntireFileAsString(char* fileName)
+{
+    string result = {0};
+
+    HANDLE fileHandle = CreateFileA(
+        fileName, 
+        GENERIC_READ, 
+        FILE_SHARE_READ, 
+        0, 
+        OPEN_EXISTING, 
+        0, 0
+    );
+
+    if (fileHandle != INVALID_HANDLE_VALUE)
+    {
+        LARGE_INTEGER fileSize;
+        if (GetFileSizeEx(fileHandle, &fileSize))
+        {
+            uint32 fileSize32 = SafeTruncateSize32(fileSize.QuadPart);
+            result.str = (char*)VirtualAlloc(0, fileSize32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+            if (result.str)
+            {
+                DWORD bytesRead;
+                if(ReadFile(fileHandle, result.str, fileSize32, &bytesRead, 0) && 
+                   fileSize32 == bytesRead)
+                {
+                    //File read Successfully!
+                    result.len = fileSize32;
+                }
+                else
+                {
+                    VirtualFree(result.str, 0, MEM_RELEASE);
+                    result.str = nullptr;
+                }
+            }
+            else
+            {
+                //Log
+            }
+        }
+        else
+        {
+            //Log
+        }
+        CloseHandle(fileHandle);
+    }
+    else
+    {
+        //Log
+    }
+
+    return result;
+}
+
+char* ReadEntireFileAsCstr(char* fileName, uint32* fileLen)
 {
     char* result = nullptr;
 
@@ -207,6 +261,33 @@ char* GetClipboardText()
             result = HeapAlloc(char, len + 1);
             wcstombs_s(0, result, len + 1, lptstr, len);
             result[len] = 0;
+            GlobalUnlock(hglb); 
+        }
+    }
+
+    CloseClipboard();
+    return result;
+}
+
+string GetClipboardTextAsString()
+{
+    HGLOBAL hglb; 
+    LPTSTR lptstr; 
+
+    if (!OpenClipboard(NULL)) 
+        return {0};
+
+    string result = {0};
+    hglb = GetClipboardData(CF_UNICODETEXT);
+    if (hglb != NULL) 
+    {   
+        lptstr = (wchar*)GlobalLock(hglb); 
+        if (lptstr != NULL) 
+        { 
+            result.len = (int)wcslen(lptstr);
+            result.str = HeapAlloc(char, result.len + 1);
+            wcstombs_s(0, result.str, result.len + 1, lptstr, result.len);
+            //result[len] = 0;
             GlobalUnlock(hglb); 
         }
     }

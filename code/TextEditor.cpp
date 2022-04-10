@@ -401,29 +401,20 @@ void SetTopChangedLine(int newLineIndex)
         editor.topChangedLineIndex = editor.cursorPos.line;
 }
 
-char** GetTextByLines(TextSectionInfo sectionInfo)
+string_buf GetMultilineText(TextSectionInfo sectionInfo)
 {
     const int numLines = sectionInfo.bottom.line - sectionInfo.top.line + 1;
-    char** result = HeapAlloc(char*, numLines); 
-    result[0] = HeapAlloc(char, sectionInfo.topLen + 1);
-	memcpy(result[0], 
-		   editor.lines[sectionInfo.top.line].text + sectionInfo.top.textAt,
-		   sectionInfo.topLen);
-	result[0][sectionInfo.topLen] = 0;
-    for (int i = 1; i < numLines - 1; ++i)
+    
+    string_buf result = init_string_buf();
+
+    for (int i = 0; i < numLines; ++i)
     {
+        bool isLastLine = i == numLines - 1;
         int l = i + sectionInfo.top.line;
-        result[i] = HeapAlloc(char, editor.lines[l].len + 1);
-        memcpy(result[i], editor.lines[l].text, editor.lines[l].len);
-		result[i][editor.lines[l].len] = 0;
-    }
-    if (!sectionInfo.spansOneLine)
-    {
-        result[numLines - 1] = HeapAlloc(char, sectionInfo.bottom.textAt + 1);
-        memcpy(result[numLines - 1], 
-               editor.lines[sectionInfo.bottom.line].text, 
-               sectionInfo.bottom.textAt);
-		result[numLines - 1][sectionInfo.bottom.textAt] = 0;
+        int lineStart = sectionInfo.top.textAt * (i == 0);
+        int lineEnd = (isLastLine || numLines == 1) ? sectionInfo.bottom.textAt : editor.lines[l].len;
+        result += string{editor.lines[l].text + lineStart, lineEnd - lineStart};
+        if (!isLastLine) result += '\n'; 
     }
 
     return result;
@@ -432,9 +423,9 @@ char** GetTextByLines(TextSectionInfo sectionInfo)
 void AppendTextToLine(int lineIndex, char* text)
 {
 	int appendStart = editor.lines[lineIndex].len;
-    size_t textLen = StringLen(text);
+    int textLen = StringLen(text);
 
-    editor.lines[lineIndex].len += (int)textLen;
+    editor.lines[lineIndex].len += textLen;
     ResizeDynamicArray(&editor.lines[lineIndex].text, 
                        editor.lines[lineIndex].len, 
                        sizeof(char), 
@@ -444,6 +435,21 @@ void AppendTextToLine(int lineIndex, char* text)
     editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
 }
 
+void AppendTextToLine(int lineIndex, string text)
+{
+	int appendStart = editor.lines[lineIndex].len;
+
+    editor.lines[lineIndex].len += text.len;
+    ResizeDynamicArray(&editor.lines[lineIndex].text, 
+                       editor.lines[lineIndex].len, 
+                       sizeof(char), 
+					   &editor.lines[lineIndex].size);
+    
+    memcpy(editor.lines[lineIndex].text + appendStart, text.str, text.len);
+    editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
+}
+
+//TODO: Refactor to work with string struct and get rid of mallocs
 void RemoveTextSection(TextSectionInfo sectionInfo)
 {   
     //Get highlighted text on bottom line
@@ -524,7 +530,7 @@ TextSectionInfo GetTextSectionInfo(EditorPos start, EditorPos end)
     return result;
 }
 
-void AddToUndoStack(EditorPos undoStart, EditorPos undoEnd, UndoType type, bool redo = false)
+void AddToUndoStack(EditorPos undoStart, EditorPos undoEnd, UndoType type, bool redo = false, bool fillBuffer = true)
 {
     UndoInfo undo;
     undo.start = undoStart;
@@ -535,8 +541,18 @@ void AddToUndoStack(EditorPos undoStart, EditorPos undoEnd, UndoType type, bool 
     {
         //TODO: remove all the outside code that sets numLines for us that isn't necessary
         TextSectionInfo section = GetTextSectionInfo(undoStart, undoEnd);
-        undo.textByLine = GetTextByLines(section);
-        undo.numLines = section.bottom.line - section.top.line + 1;
+		if (fillBuffer)
+		{
+			undo.text = GetMultilineText(section);
+		}
+        else
+        {
+            undo.text = init_string_buf();
+        }
+    }
+    else if (type == UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER)
+    {
+        undo.text = init_string_buf();
     }
 
     if (redo)
@@ -552,18 +568,7 @@ void ResetUndoStack(bool redo = false)
 
     for (int i = 0; i < *numInStack; ++i)
     {
-        if (stack[i].numLines != -1)
-        {
-            if (stack[i].textByLine)
-            {
-                for (int j = 0; j < stack[i].numLines; ++j)
-                    free(stack[i].textByLine[j]);
-                free(stack[i].textByLine);
-            }
-        }
-
-        if (stack[i].reverseBuffer.buffer)
-            free(stack[i].reverseBuffer.buffer);
+        if (stack[i].text.len) stack[i].text.dealloc();
     }
 
     *numInStack = 0;
@@ -585,6 +590,24 @@ void InsertTextInLine(int lineIndex, char* text, int textStart)
             editor.lines[lineIndex].text + textStart, 
 			prevLineLen - textStart);
     memcpy(editor.lines[lineIndex].text + textStart, text, textLen);
+    
+    editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
+}
+
+void InsertTextInLine(int lineIndex, string text, int textStart)
+{
+    int prevLineLen = editor.lines[lineIndex].len;
+    editor.lines[lineIndex].len += text.len;
+    ResizeDynamicArray(&editor.lines[lineIndex].text,
+                       editor.lines[lineIndex].len, 
+                       sizeof(char), 
+                       &editor.lines[lineIndex].size);
+    
+    int destOffset = editor.lines[lineIndex].len - prevLineLen + textStart;
+    memmove(editor.lines[lineIndex].text + destOffset, 
+            editor.lines[lineIndex].text + textStart, 
+			prevLineLen - textStart);
+    memcpy(editor.lines[lineIndex].text + textStart, text.str, text.len);
     
     editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
 }
@@ -611,42 +634,52 @@ void InsertLineAt(int lineIndex)
 	editor.lines[lineIndex] = InitLine();
 }
 
-void InsertText(char** textAsLines, TextSectionInfo sectionInfo)
+void InsertText(string multilineText, EditorPos insertAt)
 {
-    const int numLines = sectionInfo.bottom.line - sectionInfo.top.line + 1;
-    //Set up the lines before adding text to prevent pushing down the same lines being added
-    for (int i = 1; i < numLines; ++i)
-        InsertLineAt(sectionInfo.top.line + i);
+    int startOfLine = 0;
+    int lineIndex = insertAt.line;
+    int firstInsertLineLen = 0;
+    for (int endOfLine = 0; endOfLine <= multilineText.len; ++endOfLine)
+    {       
+        if (endOfLine == multilineText.len || multilineText[endOfLine] == '\n')
+        {
+			bool IsCRCL = multilineText[endOfLine - 1] == '\r';
+            int insertLen = endOfLine - startOfLine - IsCRCL;
+            int insertStart = insertAt.textAt * (lineIndex == insertAt.line);
+            string textToInsert = SubString(multilineText, startOfLine, endOfLine - IsCRCL);
+            InsertTextInLine(lineIndex, textToInsert, insertStart);
+            
+            if (endOfLine == multilineText.len) 
+            {
+				if (lineIndex == insertAt.line)
+					editor.cursorPos.textAt += insertLen;
+				else
+					editor.cursorPos.textAt = insertLen;
+				editor.cursorPos.line = lineIndex;
 
-    //Insert text
-    //NOTE: Do not be fooled! remainderLen is not always sectionInfo.topLen.
-    int remainderLen = editor.lines[sectionInfo.top.line].len - sectionInfo.top.textAt;
-    char* remainderText = HeapAlloc(char, remainderLen + 1);
-    memcpy(remainderText, 
-            editor.lines[sectionInfo.top.line].text + sectionInfo.top.textAt,
-            remainderLen + 1);
-    remainderText[remainderLen] = 0;
+                break;
+            }
+            
+            startOfLine = endOfLine + 1;
+            if (lineIndex == insertAt.line) firstInsertLineLen = insertLen; 
 
-    editor.lines[sectionInfo.top.line].len -= remainderLen;
-
-    InsertTextInLine(sectionInfo.top.line, textAsLines[0], sectionInfo.top.textAt);
-    for (int i = 1; i < numLines; ++i)
-    {
-        InsertTextInLine(sectionInfo.top.line + i, textAsLines[i], 0);
+            lineIndex++;
+            InsertLineAt(lineIndex);
+        }
     }
-    AppendTextToLine(sectionInfo.bottom.line, remainderText);
-    
-    free(remainderText);
 
-    editor.cursorPos.line += numLines - 1;
-    int lastLineLen = StringLen(textAsLines[numLines - 1]);
-	//This does not work in all situations (namely Undo()), remove perhaps?
-    if (sectionInfo.spansOneLine)
-        editor.cursorPos.textAt += lastLineLen;
-    else
-        editor.cursorPos.textAt = lastLineLen;
+    //If we inserted more than one line, move remainder text on firts line to last line
+    if (lineIndex != insertAt.line)
+    {
+        string remainderText = SubString(editor.lines[insertAt.line].text,
+                                         insertAt.textAt + firstInsertLineLen, 
+                                         editor.lines[insertAt.line].len);
+        AppendTextToLine(lineIndex, remainderText);
+        editor.lines[insertAt.line].len -= remainderText.len;
+        //editor.lines[insertAt.line].text[editor.lines[insertAt.line].len] = 0;
+    }
 
-    SetTopChangedLine(sectionInfo.top.line);
+    SetTopChangedLine(insertAt.line);
 }
 
 void SaveFile(string fileName)
@@ -718,7 +751,7 @@ void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
         case UNDOTYPE_ADDED_TEXT:
         {
             stack[*numInStack - 1].type = UNDOTYPE_REMOVED_TEXT_SECTION;
-            stack[*numInStack - 1].textByLine = GetTextByLines(sectionInfo);
+            stack[*numInStack - 1].text = GetMultilineText(sectionInfo);
             RemoveTextSection(sectionInfo);
         } break;
 
@@ -726,17 +759,13 @@ void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
         {
             stack[*numInStack - 1].type = UNDOTYPE_ADDED_TEXT;
 
-            InsertText(undoInfo.textByLine, sectionInfo);
+            InsertText(undoInfo.text.toStr(), sectionInfo.top);
             
             if (!isRedo && undoInfo.wasHighlight)
             {
                 editor.highlightStart = (undoInfo.prevCursorPos == sectionInfo.bottom) ? 
                                         sectionInfo.top : sectionInfo.bottom;
             }
-
-            for (int i = 0; i < sectionInfo.bottom.line - sectionInfo.top.line + 1; ++i)
-                free(undoInfo.textByLine[i]);
-            free(undoInfo.textByLine);
         } break;
 
         case UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER:
@@ -744,62 +773,61 @@ void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
             Assert(!isRedo);
             stack[*numInStack - 1].type = UNDOTYPE_ADDED_TEXT;
 
-            //NOTE: Do not be fooled! remainderLen is not always sectionInfo.topLen.
-            int remainderLen = editor.lines[sectionInfo.top.line].len - sectionInfo.top.textAt;
-            char* remainderText = HeapAlloc(char, remainderLen + 1);
-            memcpy(remainderText, 
-                   editor.lines[sectionInfo.top.line].text + sectionInfo.top.textAt,
-                   remainderLen + 1);
-            remainderText[remainderLen] = 0;
-
+            int firstInsertLineLen = 0;
             EditorPos at = sectionInfo.top;
-            editor.lines[at.line].len -= remainderLen; //1337 epik hax0r cheet to avoid inserting at every line
-            for (int i = undoInfo.reverseBuffer.len - 1; i >= 0; --i)
+            for (int i = (int)undoInfo.text.len - 1; i >= 0; --i)
             {
-                if (undoInfo.reverseBuffer.buffer[i] == '\n')
+                //NOTE: This should not need to check for CRCL as I wanna just use '\n' so hopefully that lasts
+                if (undoInfo.text[i] == '\n')
                 {
-                    editor.lines[at.line].text[at.textAt] = 0;
+                    //editor.lines[at.line].text[at.textAt] = 0;
+                    if (at.line == sectionInfo.top.line)
+                        firstInsertLineLen = at.textAt - sectionInfo.top.textAt;
+
+					at.textAt = 0;
+
                     at.line++;
                     InsertLineAt(at.line);
-                    at.textAt = 0;
                 }
                 else
                 {
                     AppendToDynamicArray(editor.lines[at.line].text, 
                                          editor.lines[at.line].len,
-                                         undoInfo.reverseBuffer.buffer[i], 
+                                         undoInfo.text[i], 
                                          editor.lines[at.line].size);
                     at.textAt++;
                 }
             }
 
-            if (!IsEmptyString(remainderText))
+            //If we inserted more than one line, move remainder text on firts line to last line
+            if (at.line != sectionInfo.top.line)
             {
-                InsertTextInLine(sectionInfo.bottom.line, 
-                                 remainderText, 
-                                 sectionInfo.bottom.textAt);
+                string remainderText = SubString(editor.lines[sectionInfo.top.line].text,
+                                                 sectionInfo.top.textAt + firstInsertLineLen, 
+                                                 editor.lines[sectionInfo.top.line].len);
+                AppendTextToLine(at.line, remainderText);
+                editor.lines[sectionInfo.top.line].len -= remainderText.len;
+                //editor.lines[insertAt.line].text[editor.lines[insertAt.line].len] = 0;
             }
-
-            free(remainderText);
         } break;
 
         case UNDOTYPE_OVERWRITE:
         {
             stack[*numInStack - 1].type = UNDOTYPE_OVERWRITE;
 
-            Assert(undoInfo.numLines != -1);
             RemoveTextSection(sectionInfo);
 
             EditorPos insertStart = {sectionInfo.top.textAt, sectionInfo.top.line};
 			EditorPos insertEnd = insertStart;
-			int bottomInsertLen = StringLen(undoInfo.textByLine[undoInfo.numLines - 1]);
-            insertEnd.textAt = (undoInfo.numLines == 1) * insertStart.textAt + bottomInsertLen;
-            insertEnd.line += undoInfo.numLines - 1;
-            InsertText(undoInfo.textByLine, GetTextSectionInfo(insertStart, insertEnd));
+			int lastLineStart = IndexOfLastCharInString(undoInfo.text.toStr(), '\n') + 1;
+			insertEnd.textAt += (int)undoInfo.text.len - lastLineStart;
+            insertEnd.line += CharCount('\n', undoInfo.text.toStr());
+            insertEnd.textAt -= insertStart.textAt * (insertEnd.line != insertStart.line); 
+            
+            InsertText(undoInfo.text.toStr(), insertStart);
 
             stack[*numInStack - 1].start = insertStart;
             stack[*numInStack - 1].end = insertEnd;
-            stack[*numInStack - 1].numLines = sectionInfo.bottom.line - sectionInfo.top.line + 1;
 
             if (!isRedo)
             {
@@ -812,14 +840,19 @@ void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
         case UNDOTYPE_MULTILINE_ADD:
         {
             stack[*numInStack - 1].type = UNDOTYPE_MULTILINE_REMOVE;
-            stack[*numInStack - 1].numLines = undoInfo.numLines;
-			stack[*numInStack - 1].textByLine = undoInfo.textByLine;
+			stack[*numInStack - 1].text = undoInfo.text;
 
-            for (int i = 0; i < undoInfo.numLines; ++i)
+            int lineIndex = sectionInfo.top.line;
+            int removeStart = 0;
+            for (int i = 0; i <= undoInfo.text.len; ++i)
             {
-                int line = i + sectionInfo.top.line;
-                int end = sectionInfo.top.textAt + StringLen(undoInfo.textByLine[i]);
-                RemoveTextInLine(line, sectionInfo.top.textAt, end);
+                //NOTE: This should not need to check for CRCL as I wanna just use '\n' so hopefully that lasts
+                if (undoInfo.text[i] == '\n' || i == undoInfo.text.len)
+                {
+                    RemoveTextInLine(lineIndex, sectionInfo.top.textAt, i - removeStart);
+                    removeStart = i + 1;
+                    lineIndex++;
+                }
             }
         } break;
 
@@ -827,13 +860,20 @@ void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
         case UNDOTYPE_MULTILINE_REMOVE:
         {
             stack[*numInStack - 1].type = UNDOTYPE_MULTILINE_ADD;
-			stack[*numInStack - 1].numLines = undoInfo.numLines;
-			stack[*numInStack - 1].textByLine = undoInfo.textByLine;
+			stack[*numInStack - 1].text = undoInfo.text;
 
-            for (int i = 0; i < undoInfo.numLines; ++i)
+            int lineIndex = sectionInfo.top.line;
+            int insertStart = 0;
+            for (int i = 0; i <= undoInfo.text.len; ++i)
             {
-                int line = i + sectionInfo.top.line;
-                InsertTextInLine(line, undoInfo.textByLine[i], sectionInfo.top.textAt);
+                //NOTE: This should not need to check for CRCL as I wanna just use '\n' so hopefully that lasts
+                if (undoInfo.text[i] == '\n' || i == undoInfo.text.len)
+                {
+                    string insertedText = SubString(undoInfo.text.toStr(), insertStart, i);
+                    InsertTextInLine(lineIndex, insertedText, sectionInfo.top.textAt);
+                    insertStart = i + 1;
+                    lineIndex++;
+                }
             }
         } break;
     }
@@ -919,9 +959,9 @@ void AddChar()
         TextSectionInfo highlightInfo = 
             GetTextSectionInfo(editor.highlightStart, editor.cursorPos);
         editor.undoStack[editor.numUndos - 1].type = UNDOTYPE_OVERWRITE;
-        editor.undoStack[editor.numUndos - 1].textByLine = GetTextByLines(highlightInfo);
-        editor.undoStack[editor.numUndos - 1].numLines = 
-            highlightInfo.bottom.line - highlightInfo.top.line + 1;
+        editor.undoStack[editor.numUndos - 1].text = GetMultilineText(highlightInfo);
+        //editor.undoStack[editor.numUndos - 1].numLines = 
+        //    highlightInfo.bottom.line - highlightInfo.top.line + 1;
         
 		RemoveTextSection(highlightInfo);
         editor.undoStack[editor.numUndos - 1].start = editor.cursorPos;
@@ -984,29 +1024,19 @@ void RemoveChar()
 {
     Line* line = &editor.lines[editor.cursorPos.line];
     UndoInfo* currentUndo = &editor.undoStack[editor.numUndos - 1];
-	ResizableString* reverseBuffer;
+	string_buf* undoReverseBuffer = &editor.undoStack[editor.numUndos - 1].text;
 
     if (currentUndo->type != UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER || 
         editor.cursorPos != currentUndo->end)
     {
         AddToUndoStack(editor.cursorPos, editor.cursorPos, UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER);
-		reverseBuffer = &editor.undoStack[editor.numUndos - 1].reverseBuffer;
-		reverseBuffer->buffer = HeapAlloc(char, reverseBuffer->size);
+		undoReverseBuffer = &editor.undoStack[editor.numUndos - 1].text;
         ResetUndoStack(true);
     }
-	else
-	{
-		//This feels redundant lol
-		reverseBuffer = &editor.undoStack[editor.numUndos - 1].reverseBuffer;
-	}
 
     if (editor.cursorPos.textAt > 0)
     {
-        //Append to undo text buffer
-        AppendToDynamicArray(reverseBuffer->buffer, 
-                             reverseBuffer->len, 
-                             line->text[editor.cursorPos.textAt - 1],
-                             reverseBuffer->size);
+        *undoReverseBuffer += line->text[editor.cursorPos.textAt - 1];
         
 		line->len--;
 		for (int i = editor.cursorPos.textAt - 1; i < line->len; ++i)
@@ -1018,8 +1048,7 @@ void RemoveChar()
     }
     else if (editor.numLines > 1 && editor.cursorPos.line > 0)
     {
-        //Append to undo text buffer
-        AppendToDynamicArray(reverseBuffer->buffer, reverseBuffer->len, '\n', reverseBuffer->size);
+        *undoReverseBuffer += '\n';
 
         editor.cursorPos.textAt = editor.lines[editor.cursorPos.line - 1].len;
         AppendTextToLine(editor.cursorPos.line - 1, editor.lines[editor.cursorPos.line].text);
@@ -1036,7 +1065,7 @@ void RemoveChar()
 
     editor.undoStack[editor.numUndos - 1].end = editor.cursorPos;
 
-    reverseBuffer->buffer[reverseBuffer->len] = 0;
+    //undoReverseBuffer->str[undoReverseBuffer->len] = 0;
 
     SetTopChangedLine(editor.cursorPos.line);
 }
@@ -1048,7 +1077,7 @@ void Backspace()
         AddToUndoStack(editor.highlightStart, editor.cursorPos, UNDOTYPE_REMOVED_TEXT_SECTION);
         editor.undoStack[editor.numUndos - 1].wasHighlight = true;
         TextSectionInfo highlightInfo = GetTextSectionInfo(editor.highlightStart, editor.cursorPos);
-        editor.undoStack[editor.numUndos - 1].textByLine = GetTextByLines(highlightInfo);
+        editor.undoStack[editor.numUndos - 1].text = GetMultilineText(highlightInfo);
         ResetUndoStack(true);
         
         RemoveTextSection(highlightInfo);
@@ -1074,22 +1103,10 @@ void UnTab()
         lineAt = highlight.top.line;
     }
 
-    AddToUndoStack({-1, editor.cursorPos.line}, {-1, editor.cursorPos.line}, UNDOTYPE_REMOVED_TEXT_SECTION);
-    //Free what was initially there as it'll likely be incorrect, maybe refactor this?
-    free(editor.undoStack[editor.numUndos - 1].textByLine[0]);
-    free(editor.undoStack[editor.numUndos - 1].textByLine);
+    AddToUndoStack({-1, editor.cursorPos.line}, {-1, editor.cursorPos.line}, UNDOTYPE_REMOVED_TEXT_SECTION, false, false);
+    editor.undoStack[editor.numUndos - 1].text.len = 0;
 
-    if (editor.highlightStart.line != -1)
-    {
-        int numLines = highlight.bottom.line - highlight.top.line + 1;
-        editor.undoStack[editor.numUndos - 1].textByLine = HeapAlloc(char*, numLines);
-        editor.undoStack[editor.numUndos - 1].numLines = numLines;
-    }
-	else
-	{
-		editor.undoStack[editor.numUndos - 1].textByLine = HeapAlloc(char*, 1);
-	}
-
+    int undoTextAt = 0;
     do
     {
         int numSpacesAtFront = 0;
@@ -1131,11 +1148,10 @@ void UnTab()
             SetTopChangedLine(lineAt);
         }
 
-        int textByLineIndex = lineAt - editor.cursorPos.line;
-        editor.undoStack[editor.numUndos - 1].textByLine[textByLineIndex] = HeapAlloc(char, numRemoved + 1);
-        for (int i = 0; i < numRemoved; ++i)
-            editor.undoStack[editor.numUndos - 1].textByLine[textByLineIndex][i] = ' ';
-        editor.undoStack[editor.numUndos - 1].textByLine[textByLineIndex][numRemoved] = 0;
+        for (int i = undoTextAt; i < undoTextAt + numRemoved; ++i)
+            editor.undoStack[editor.numUndos - 1].text += ' ';
+		editor.undoStack[editor.numUndos - 1].text += '\n';
+		undoTextAt += numRemoved;
 
         lineAt++;
     } while (lineAt <= highlight.bottom.line);
@@ -1161,9 +1177,9 @@ void Enter()
             TextSectionInfo highlightInfo = GetTextSectionInfo(editor.highlightStart, 
                                                              editor.cursorPos);
 	    	editor.undoStack[editor.numUndos - 1].type = UNDOTYPE_OVERWRITE;
-            editor.undoStack[editor.numUndos - 1].textByLine = GetTextByLines(highlightInfo);
-            editor.undoStack[editor.numUndos - 1].numLines = 
-                highlightInfo.bottom.line - highlightInfo.top.line;
+            editor.undoStack[editor.numUndos - 1].text = GetMultilineText(highlightInfo);
+            //editor.undoStack[editor.numUndos - 1].numLines = 
+            //    highlightInfo.bottom.line - highlightInfo.top.line;
 
             RemoveTextSection(highlightInfo);
         }
@@ -1306,13 +1322,9 @@ void CopyHighlightedText()
 
 void Paste()
 {
-    char* textToPaste = GetClipboardText();
-    if (textToPaste != nullptr)
+    string textToPaste = GetClipboardTextAsString();
+    if (textToPaste.str != nullptr)
     {
-        int numLinesToPaste = 0;
-        char** linesToPaste = SplitStringByLines(textToPaste, &numLinesToPaste);
-        free(textToPaste);
-
         AddToUndoStack(editor.cursorPos, editor.cursorPos, UNDOTYPE_ADDED_TEXT);
         ResetUndoStack(true);
 
@@ -1325,30 +1337,19 @@ void Paste()
 
 			editor.undoStack[editor.numUndos - 1].start = highlightInfo.top;
             editor.undoStack[editor.numUndos - 1].type = UNDOTYPE_OVERWRITE;
-            editor.undoStack[editor.numUndos - 1].textByLine = GetTextByLines(highlightInfo);
-            editor.undoStack[editor.numUndos - 1].numLines = 
-                highlightInfo.bottom.line - highlightInfo.top.line + 1;
+            editor.undoStack[editor.numUndos - 1].text = GetMultilineText(highlightInfo);
+            //editor.undoStack[editor.numUndos - 1].numLines = 
+            //    highlightInfo.bottom.line - highlightInfo.top.line + 1;
             
             RemoveTextSection(highlightInfo);
             ClearHighlights();
         }
 
-        TextSectionInfo sectionInfo;
-        sectionInfo.spansOneLine = numLinesToPaste == 1;
-        sectionInfo.top.textAt = editor.cursorPos.textAt;
-        sectionInfo.topLen = StringLen(linesToPaste[0]);
-        sectionInfo.top.line = editor.cursorPos.line;
-        sectionInfo.bottom.textAt = (sectionInfo.spansOneLine) * editor.cursorPos.textAt + 
-                                    StringLen(linesToPaste[numLinesToPaste - 1]);
-        sectionInfo.bottom.line = editor.cursorPos.line + numLinesToPaste - 1;
-        InsertText(linesToPaste, sectionInfo);
+        InsertText(textToPaste, editor.cursorPos);
 
         editor.undoStack[editor.numUndos - 1].end = editor.cursorPos;
-        SetTopChangedLine(sectionInfo.top.line);
 
-        for (int i = 0; i < numLinesToPaste; ++i)
-            free(linesToPaste[i]);
-        free(linesToPaste);
+        free(textToPaste.str);
 
         Tokenise(&tokenInfo); 
     } 
@@ -1361,7 +1362,7 @@ void CutHighlightedText()
     
     AddToUndoStack(editor.highlightStart, editor.cursorPos, UNDOTYPE_REMOVED_TEXT_SECTION);
     TextSectionInfo highlightInfo = GetTextSectionInfo(editor.highlightStart, editor.cursorPos);
-    editor.undoStack[editor.numUndos - 1].textByLine = GetTextByLines(highlightInfo);
+    editor.undoStack[editor.numUndos - 1].text = GetMultilineText(highlightInfo);
     ResetUndoStack(true);
 
     RemoveTextSection(GetTextSectionInfo(editor.highlightStart, editor.cursorPos));
@@ -1375,27 +1376,30 @@ void OpenFile()
 {
     int fileNameLen = 0;
     char* fileName = ShowFileDialogAndGetFileName(false, &fileNameLen);
-    char* file = ReadEntireFile(fileName);
-    if (file)
+    string file = ReadEntireFileAsString(fileName);
+    if (file.str)
     {
         editor.fileName = fileName;
 
-        int numLines = 0;
-        char** fileLines = SplitStringByLines(file, &numLines);
-
-        editor.numLines = numLines;
-        for (int i = 0; i < numLines; ++i)
+        editor.numLines = 0;
+        char* startOfLine = file.str;
+        while(true)
         {
-            int lineLen = StringLen(fileLines[i]);
-            memcpy(editor.lines[i].text, fileLines[i], lineLen);
-            editor.lines[i].len = lineLen;
-            editor.lines[i].text[lineLen] = 0;
-            free(fileLines[i]);
+            if (file[0] == '\n' || !file[0])
+            {
+                int lineLen = (int)(file.str - startOfLine) - ((file.str - 1)[0] == '\r');
+                memcpy(editor.lines[editor.numLines].text, startOfLine, lineLen);
+                editor.lines[editor.numLines].len = lineLen;
+                editor.lines[editor.numLines].text[lineLen] = 0;
+                editor.numLines++;
+                if (!file[0]) break;
+                startOfLine = file.str + 1;
+            }
+            file.str++;
         }
 
-        free(fileLines);
         free(fileName);
-        FreeWin32(file);
+        FreeWin32(file.str);
 
         ResetUndoStack();
         ResetUndoStack(true);
@@ -1424,8 +1428,6 @@ void Save()
 		SaveAs();
     }
 }
-
-
 
 void Undo()
 {

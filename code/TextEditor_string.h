@@ -64,6 +64,12 @@ inline bool CharInString(char c, char* s)
     return CharInString(c, cstring(s));
 }
 
+int CharCount(char c, string s);
+inline int CharCount(char c, char* s)
+{
+    return CharCount(c, cstring(s));
+}
+
 struct string_buf
 {
     char* str;
@@ -71,6 +77,11 @@ struct string_buf
     size_t cap;
 
     char operator[](int index) { return str[index]; }
+
+    void operator+=(char c)
+    {
+        AppendToDynamicArray(str, len, c, cap);
+    }
 
     void operator+=(string s)
     {
@@ -102,6 +113,10 @@ string_buf init_string_buf(string s, size_t capacity = 0);
 inline string_buf init_string_buf(char* cstr, size_t capacity = 0)
 {
     return init_string_buf(cstring(cstr), capacity);
+}
+inline string_buf init_string_buf(size_t capacity = 128)
+{
+    return init_string_buf(lstring(""), capacity);
 }
 
 

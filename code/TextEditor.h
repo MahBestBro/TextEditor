@@ -77,14 +77,8 @@ struct UndoInfo
     EditorPos start;
     EditorPos end;
     EditorPos prevCursorPos;
-
     bool wasHighlight = false; //Only used for UNDOTYPE_REMOVED_TEXT_SECTION
-    
-    char** textByLine = nullptr;
-    int numLines = -1;
-    
-    //Only used for backspacing char by char
-    ResizableString reverseBuffer = {nullptr, INITIAL_LINE_SIZE, 0};
+    string_buf text = {0}; //If backspacing, this will be in reverse
 };
 
 inline bool operator ==(EditorPos lhs, EditorPos rhs)
@@ -135,11 +129,13 @@ inline void* dbg_malloc(size_t size, const char* file, int line)
 
 void FreeWin32(void* memory);
 
-char* ReadEntireFile(char* fileName, uint32* fileLen  = nullptr);
+char* ReadEntireFileAsCstr(char* fileName, uint32* fileLen = nullptr);
+string ReadEntireFileAsString(char* fileName);
 bool WriteToFile(char* fileNameCStr, char* text, uint64 textLen, bool overwrite, int32 writeStart = 0);
 
 void CopyToClipboard(const char* text, size_t len);
 char* GetClipboardText();
+string GetClipboardTextAsString();
 
 char* ShowFileDialogAndGetFileName(bool save, int* fileNameLen = 0);
 

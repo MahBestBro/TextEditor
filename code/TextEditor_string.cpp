@@ -76,13 +76,20 @@ bool CharInString(char c, string s)
     return false;
 }
 
+int CharCount(char c, string s)
+{
+    int result = 0;
+    for (int i = 0; i < s.len; ++i)
+        result += s[i] == c;
+    return result;
+}
 
 
 void string_buf::dealloc()
 {
     free(str);
     len = 0;
-    cap = 0;
+    cap = 0;   
 }
 
 char* string_buf::cstr()
