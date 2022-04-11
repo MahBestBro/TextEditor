@@ -449,22 +449,16 @@ void AppendTextToLine(int lineIndex, string text)
     editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
 }
 
-//TODO: Refactor to work with string struct and get rid of mallocs
 void RemoveTextSection(TextSectionInfo sectionInfo)
 {   
     //Get highlighted text on bottom line
-    char* remainingBottomText = nullptr;
-    int remainingBottomLen = 0;
+    string remainingBottomText = {0};
     if (!sectionInfo.spansOneLine)
-    { 
-        remainingBottomLen = 
-            editor.lines[sectionInfo.bottom.line].len - sectionInfo.bottom.textAt;
-        remainingBottomText = HeapAlloc(char, remainingBottomLen + 1);
-        memcpy(remainingBottomText, 
-               editor.lines[sectionInfo.bottom.line].text + sectionInfo.bottom.textAt, 
-               remainingBottomLen);
-        remainingBottomText[remainingBottomLen] = 0;
-    }    
+    {
+        remainingBottomText = SubString(editor.lines[sectionInfo.bottom.line].text, 
+                                        sectionInfo.bottom.textAt,
+                                        editor.lines[sectionInfo.bottom.line].len);
+    }
 
     //Shift lines below highlited section up
     editor.numLines -= sectionInfo.bottom.line - sectionInfo.top.line;
@@ -474,28 +468,29 @@ void RemoveTextSection(TextSectionInfo sectionInfo)
     }
 
     //Remove Text from top line and connect bottom line text
-    const int topRemovedLen = sectionInfo.topLen;
     memcpy(
         editor.lines[sectionInfo.top.line].text + sectionInfo.top.textAt, 
-        editor.lines[sectionInfo.top.line].text + sectionInfo.top.textAt + topRemovedLen,
-        editor.lines[sectionInfo.top.line].len - (sectionInfo.top.textAt + topRemovedLen)
+        editor.lines[sectionInfo.top.line].text + sectionInfo.top.textAt + sectionInfo.topLen,
+        editor.lines[sectionInfo.top.line].len - (sectionInfo.top.textAt + sectionInfo.topLen)
     );
-    editor.lines[sectionInfo.top.line].len += remainingBottomLen - topRemovedLen;
+    editor.lines[sectionInfo.top.line].len += remainingBottomText.len - sectionInfo.topLen;
     ResizeDynamicArray(&editor.lines[sectionInfo.top.line].text, 
                        editor.lines[sectionInfo.top.line].len,
                        sizeof(char),
                        &editor.lines[sectionInfo.top.line].size);
     
-    memcpy(editor.lines[sectionInfo.top.line].text + sectionInfo.top.textAt, 
-           remainingBottomText, 
-           remainingBottomLen);
-    editor.lines[sectionInfo.top.line].text[editor.lines[sectionInfo.top.line].len] = 0;
-    
+    if (!sectionInfo.spansOneLine)
+    {
+        memcpy(editor.lines[sectionInfo.top.line].text + sectionInfo.top.textAt, 
+               remainingBottomText.str, 
+               remainingBottomText.len);
+        //editor.lines[sectionInfo.top.line].text[editor.lines[sectionInfo.top.line].len] = 0;
+    }    
 
     editor.cursorPos = {sectionInfo.top.textAt, sectionInfo.top.line};
     SetTopChangedLine(editor.cursorPos.line);
 
-	if (remainingBottomText) free(remainingBottomText);
+	//if (remainingBottomText) free(remainingBottomText);
 }
 
 TextSectionInfo GetTextSectionInfo(EditorPos start, EditorPos end)
