@@ -40,7 +40,7 @@ UserSettings LoadUserSettingsFromConfigFile()
     Assert(file);
 
     int numLines = 0;
-    char** lines = SplitStringByLines(file, &numLines);
+    char** lines = SplitStringByLines(file, &numLines); //@Cleanup
     for (int i = 0; i < numLines; ++i)
     {
         MemberMetaData memberData = UserSettingsMemberMetaData[i];

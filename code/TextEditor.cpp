@@ -105,6 +105,14 @@ int TextPixelLength(char* text, int len)
     return result;
 }
 
+int TextPixelLength(string text)
+{
+    int result = 0;
+    for (int i = 0; i < text.len; i++)
+        result += fontChars[text[i]].advance;
+    return result;
+}
+
 //
 //DRAWING FUNCTIONS
 //
@@ -489,8 +497,6 @@ void RemoveTextSection(TextSectionInfo sectionInfo)
 
     editor.cursorPos = {sectionInfo.top.textAt, sectionInfo.top.line};
     SetTopChangedLine(editor.cursorPos.line);
-
-	//if (remainingBottomText) free(remainingBottomText);
 }
 
 TextSectionInfo GetTextSectionInfo(EditorPos start, EditorPos end)
@@ -1776,49 +1782,54 @@ void Draw(float dt)
         for (int t = 0; t < tokenInfo.numTokens; ++t)
         {
             Token token = tokenInfo.tokens[t];
-            int currentLine = token.at.line; 
-			bool prevTokenOnSameLine = t > 0 && 
-                                       tokenInfo.tokens[t - 1].at.line == token.at.line;
+
+            //if (!token.text.str) continue;
+
+			bool prevTokenOnSameLine = t > 0 && tokenInfo.tokens[t - 1].line == token.line;
 			bool nextTokenOnSameLine = t < tokenInfo.numTokens - 1 && 
-                                       tokenInfo.tokens[t + 1].at.line == token.at.line;
+                                       tokenInfo.tokens[t + 1].line == token.line;
 
             //Draw text
             if (t == 0 || !prevTokenOnSameLine)
                 x = start.x - editor.textOffset.x;
-            int y = start.y - currentLine * CURSOR_HEIGHT + editor.textOffset.y;
+            int y = start.y - token.line * CURSOR_HEIGHT + editor.textOffset.y;
 
             //Draw whitespace at front of line
 			if (!prevTokenOnSameLine)
             {
-				x += TextPixelLength(editor.lines[currentLine].text, token.at.textAt);
-
                 //Draw Line num
                 char lineNumText[8]; //TODO: Calculate how many lines we want max cause fucking ey this will likely go to shit
-                IntToString(currentLine + 1, lineNumText);
+                IntToString(token.line + 1, lineNumText);
                 DrawText(cstring(lineNumText), 
                          start.x - LINE_NUM_OFFSET, 
                          y, 
                          userSettings.lineNumColour, 
                          {0, 0, yBottomLimit, 0});
+
+                if (token.text.str) //TODO: Investigate whether this check is really necessary
+                {
+                    int whitespaceLen = (int)(token.text.str - editor.lines[token.line].text);
+				    x += TextPixelLength(editor.lines[token.line].text, whitespaceLen);
+                }
             }
 
             //Cleanup once editor lines are string buffers
-            string text = {editor.lines[currentLine].text + token.at.textAt, token.textLength};
+            string text = token.text;
 
             //Draw token
             Colour textColour = userSettings.tokenColours[token.type];
             DrawText(text, x, y, textColour, textBounds);
-            x += TextPixelLength(text.str, token.textLength);
+            x += TextPixelLength(text);
 
             //Draw whitespace
-            if (t < tokenInfo.numTokens - 1 && token.textLength > 0 && nextTokenOnSameLine)
+            if (t < tokenInfo.numTokens - 1 && token.text.len > 0 && nextTokenOnSameLine)
             {
-                text.str += token.textLength;
-                int remainderLength = tokenInfo.tokens[t + 1].at.textAt - token.at.textAt 
-                                      - token.textLength;
+                text.str += token.text.len;
+                int remainderLength = (int)(tokenInfo.tokens[t + 1].text.str - token.text.str) 
+                                      - token.text.len;
                 text.len = remainderLength;
                 DrawText(text, x, y, textColour, textBounds);
-                x += TextPixelLength(text.str, remainderLength);
+                x += TextPixelLength(text);
             }
         }
     }

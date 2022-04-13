@@ -131,9 +131,9 @@ void IntToString(int val, char* buffer)
 }
 
 //TODO: Support multiple bases?
-int StringToInt(char* str, int len, bool* success)
+int StringToInt(string str, bool* success)
 {
-    if (len == 1 && str[0] == '-')
+    if (str.len == 1 && str[0] == '-')
     {
         if (success) *success = false;
         return -1;
@@ -142,7 +142,7 @@ int StringToInt(char* str, int len, bool* success)
     int result = 0;
     int powOf10 = 1;
     int sign = (str[0] == '-') ? 1 : -1;
-    for (int i = len - 1; i >= (int)(str[0] == '-'); --i)
+    for (int i = str.len - 1; i >= (int)(str[0] == '-'); --i)
     {
         if (i == 0 && str[i] == '-') continue;
 
@@ -233,15 +233,4 @@ char* ReverseString(char* str, int len)
         result[len - i - 1] = str[i];
     result[len] = 0;
     return result;
-}
-
-bool CompareStrings(char* a, int aLen, char* b, int bLen)
-{
-    if (aLen != bLen) return false;
-
-    for (int i = 0; i < aLen; ++i)
-    {
-        if (a[i] != b[i]) return false;
-    }
-    return true;
 }

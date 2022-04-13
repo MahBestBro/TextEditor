@@ -40,8 +40,8 @@ enum MultilineState
 
 struct Token
 {
-    EditorPos at;
-    int textLength;
+    int line;
+    string text;
     TypeOfToken type;
 };
 

@@ -8,8 +8,7 @@
 struct LineView
 {
     int lineIndex;
-    int textAt;
-    int textLen;
+    string text;
 };
 
 extern Editor editor;
@@ -57,9 +56,7 @@ bool DefinitionExists(bool isTypedef, Token token, Line code)
     int numDefinitions = (isTypedef) ? numTypedefs : numPoundDefines;
     for (int i = 0; i < numDefinitions; ++i)
     {
-        char* defText = editor.lines[definitions[i].lineIndex].text + definitions[i].textAt;
-        char* tokenText = code.text + token.at.textAt;
-        if (CompareStrings(defText, definitions[i].textLen, tokenText, token.textLength))
+        if (definitions[i].text == token.text)
             return true;
     } 
     return false;
@@ -83,7 +80,7 @@ void AddTypeNameForTypedef(EditorPos at)
     while (at.textAt < currentLine.len && !IsWhiteSpace(currentLine.text[at.textAt]))
         at.textAt++;
 
-    //While we haven't hit a semicolon, also skip over curly crackets
+    //While we haven't hit a semicolon, also skip over curly brackets
     int scopeLevel = 0;
     while (true)
     {
@@ -111,9 +108,9 @@ void AddTypeNameForTypedef(EditorPos at)
         int typeStart = at.textAt;
         while (typeStart < currentLine.len && !IsWhiteSpace(currentLine.text[typeStart])) 
             typeStart--;
-        int typeLen = at.textAt - typeStart - 1;
+        string typeText = {currentLine.text + typeStart + 1, at.textAt - typeStart - 1};
 
-        typedefs[numTypedefs++] = {at.line, typeStart + 1, typeLen};
+        typedefs[numTypedefs++] = {at.line, typeText};
     }
 }
 
@@ -126,7 +123,8 @@ string inbuiltTypes[] =
     lstring("bool"), 
     lstring("struct"), 
     lstring("enum"), 
-    lstring("unsigned")
+    lstring("unsigned"),
+    lstring("namespace")
 };
 
 string keywords[] = 
@@ -140,7 +138,8 @@ string keywords[] =
     lstring("while"), 
     lstring("typedef"),
     lstring("inline"),
-    lstring("extern")
+    lstring("extern"),
+    lstring("using")
 };
 
 string preprocessorTags[] = 
@@ -157,7 +156,7 @@ string preprocessorTags[] =
 
 Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
 {
-    if (code.len == 0) return {{0, lineIndex}, -1, TOKEN_UNKNOWN};
+    if (code.len == 0) return {lineIndex, string{0}, TOKEN_UNKNOWN};
 
 	int _at = *at;
 	while (IsWhiteSpace(code.text[_at]) && _at < code.len) ++_at;
@@ -165,10 +164,11 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
    
 
     Token token = {};
-    token.at = {_at, lineIndex};
+	token.text.str = code.text + _at;
+    token.line = lineIndex;
 	if (_at == code.len)
 	{
-		token.textLength = 0;
+		token.text.len = 0;
 		token.type = TOKEN_EOS;
         *at = code.len;
         return token;
@@ -179,6 +179,8 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
         case MS_COMMENT:
         {
             token.type = TOKEN_COMMENT;
+            
+            int start = _at;
             _at++;
             while(_at < code.len)
             {
@@ -190,13 +192,16 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
 
                 _at++;
             } 
-            token.textLength = _at + (_at < code.len);
+
+            token.text.len = _at - start + (_at < code.len);
             *at = _at + (_at < code.len);
         } return token;
 
         case MS_STRING: 
         {
             token.type = TOKEN_STRING;
+
+            int start = _at;
             while(_at < code.len)
             {
                 if (code.text[_at] == '"')
@@ -207,14 +212,14 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
                 _at++;
             } 
 
-            token.textLength = _at + (_at < code.len);
+            token.text.len = _at - start + (_at < code.len);
             *at = _at + (_at < code.len);
         } return token;
 
         case MS_NON_MULTILINE: break;
     }
 
-    token.textLength = 1;
+    token.text.len = 1;
     char c = code.text[_at];
     ++_at;
 
@@ -257,7 +262,7 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
             if (code.text[_at] == '>')
             {
                 token.type = TOKEN_PUNCTUATION;
-                token.textLength = 2;
+                token.text.len = 2;
                 _at++;
             } 
             else
@@ -281,7 +286,7 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
 					*ms = MS_COMMENT;
 
                 token.type = TOKEN_COMMENT;
-				token.textLength = code.len - _at + 1;
+				token.text.len = code.len - _at + 1;
                 _at = code.len;   
             }
         } break;
@@ -300,7 +305,7 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
                 int start = _at;
                 while(code.text[_at] != '>' && _at < code.len) _at++;
                 _at += (code.text[_at] == '>');
-                token.textLength = _at - start + 1;
+                token.text.len = _at - start + 1;
             }
         } break;
 
@@ -310,11 +315,11 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
 
             int start = _at;
             while(_at < code.len && code.text[_at] != '"') ++_at;
-            token.textLength = _at - start + 1; //+1 to include quotation
+            token.text.len = _at - start + 1;
             
             if (code.text[_at] == '"')
             {
-                ++token.textLength;
+                ++token.text.len;
                 ++_at;    
             }
 			else
@@ -332,15 +337,14 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
             {
                 ++_at;
             }
-            token.textLength += _at - start;
+            token.text.len += _at - start;
 
-            string tokenText = {code.text + token.at.textAt, token.textLength};
-            if (IsInStringArray(tokenText, preprocessorTags, StackArrayLen(preprocessorTags)))
+            if (IsInStringArray(token.text, preprocessorTags, StackArrayLen(preprocessorTags)))
             {
                 token.type = TOKEN_PREPROCESSOR_TAG;
 
                 
-                if (tokenText == lstring("#define"))
+                if (token.text == lstring("#define"))
                 {
                     //Get what's actually defined
                     int defStart = _at;
@@ -348,14 +352,12 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
                         ++defStart;
 
                     int defEnd = defStart;
-                    while (defStart < code.len && !IsWhiteSpace(code.text[defEnd])) 
+                    while (defEnd < code.len && !IsWhiteSpace(code.text[defEnd])) 
                         ++defEnd;
-                    int defLen = defEnd - defStart;
 
-					if (defLen > 0)
-                    {
-                        poundDefines[numPoundDefines++] = {lineIndex, defStart, defLen}; 
-                    }
+                    string poundDefineText = {code.text + defStart, defEnd - defStart};
+					if (poundDefineText.len > 0)
+                        poundDefines[numPoundDefines++] = {lineIndex, poundDefineText};
                 }
             }  
         } break;
@@ -369,29 +371,28 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
             {
                 ++_at;
             }
-            token.textLength += _at - start;
-            string tokenStr = {code.text + token.at.textAt, token.textLength};
+            token.text.len += _at - start;
 
             if (IsAlphabetical(c))
             {
                 token.type = TOKEN_IDENTIFIER;
-                if (IsInStringArray(tokenStr, keywords, StackArrayLen(keywords)))
+                if (IsInStringArray(token.text, keywords, StackArrayLen(keywords)))
                 {
                     token.type = TOKEN_KEYWORD;
 
-                    if (tokenStr == lstring("typedef"))
+                    if (token.text == lstring("typedef"))
                         AddTypeNameForTypedef({_at, lineIndex});
                 }
                 else if (code.text[_at] == '(')
                 {
                     token.type = TOKEN_FUNCTION;
                 }
-                else if (IsInStringArray(tokenStr, inbuiltTypes, StackArrayLen(inbuiltTypes))) 
+                else if (IsInStringArray(token.text, inbuiltTypes, StackArrayLen(inbuiltTypes))) 
                 {
                     token.type = TOKEN_INBUILT_TYPE;
                     
                     //If a struct or enum, add the type
-                    if (tokenStr == lstring("struct") || tokenStr == lstring("enum"))
+                    if (token.text == lstring("struct") || token.text == lstring("enum"))
                     {
                         int typeStart = _at;
                         while (typeStart < code.len && IsWhiteSpace(code.text[typeStart])) 
@@ -400,15 +401,13 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
                         int typeEnd = typeStart;
                         while (typeStart < code.len && !IsWhiteSpace(code.text[typeEnd])) 
                             ++typeEnd;
-                        int typeLen = typeEnd - typeStart;
 
-                        if (typeLen > 0)
-                        {
-                            typedefs[numTypedefs++] = {lineIndex, typeStart, typeLen};
-                        }
+                        string typeText = {code.text + typeStart, typeEnd - typeStart};
+                        if (typeText.len > 0)
+                            typedefs[numTypedefs++] = {lineIndex, typeText};
                     }
                 }
-                else if (IsBool(tokenStr))
+                else if (IsBool(token.text))
                 {
                     token.type = TOKEN_BOOL;
                 }
@@ -422,7 +421,7 @@ Token GetTokenFromLine(Line code, int lineIndex, int* at, MultilineState* ms)
                 } 
                 
             }
-            else if (IsNumber(tokenStr))
+            else if (IsNumber(token.text))
             { 
                 token.type = TOKEN_NUMBER;
             }
