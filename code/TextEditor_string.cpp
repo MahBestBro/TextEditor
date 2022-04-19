@@ -34,7 +34,7 @@ string SubString(string s, int start, int end)
     result.str += start;
     result.len = ((end == -1) ? s.len : end ) - start;
     return result;
-}    
+}
 
 bool StringContains(string s, string target)
 {
@@ -102,11 +102,43 @@ char* string_buf::cstr()
 
 string_buf init_string_buf(string s, size_t capacity)
 { 
-    string_buf result = {0, (size_t)s.len, (capacity) ? capacity : s.len};
+    string_buf result = {0, s.len, (capacity) ? capacity : s.len};
     result.str = (char*)malloc(result.cap);
     memcpy(result.str, s.str, s.len);
     return result;
 }
+
+void StringBuf_RangeRemove(string_buf* buf, int start, int end)
+{
+    memcpy(buf->str + start, buf->str + end, end - start);
+    buf->len -= end - start;
+}
+
+void StringBuf_RemoveStringAt(string_buf* buf, int at, int len)
+{
+    memcpy(buf->str + at, buf->str + at + len, buf->len - (at + len));
+    buf->len -= len;
+}
+
+void StringBuf_InsertString(string_buf* buf, string insert, int at)
+{
+    int prevLen = buf->len;
+    buf->len += insert.len;
+    ResizeDynamicArray(&buf->str, buf->len, 1, &buf->cap);
+    
+    int destOffset = buf->len - prevLen + at;
+    memmove(buf->str + destOffset, buf->str + at, prevLen - at);
+    memcpy(buf->str + at, insert.str, insert.len);
+    
+    //editor.lines[lineIndex].text[editor.lines[lineIndex].len] = 0;
+}
+
+void StringBuf_RemoveAt(string_buf* buf, int at)
+{
+    buf->len--;
+    memcpy(buf->str + at, buf->str + at + 1, buf->len - at);
+}
+
 
 void IntToString(int val, char* buffer)
 {

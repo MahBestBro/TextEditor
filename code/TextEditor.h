@@ -38,13 +38,6 @@ struct EditorPos
     int line;
 };
 
-struct Line
-{
-    char* text;
-    int size;
-    int len;
-};
-
 struct ResizableString
 {
     char* buffer;
@@ -94,11 +87,9 @@ inline bool operator !=(EditorPos lhs, EditorPos rhs)
 struct Editor
 {
     string_buf fileName;
-    //char* fileName = nullptr;
-    //int fileNameLen = 0;
 
     char currentChar = 0;
-    Line lines[MAX_LINES];
+    string_buf lines[MAX_LINES];
     int numLines = 1;
     int topChangedLineIndex = -1;
 
@@ -134,6 +125,7 @@ string ReadEntireFileAsString(char* fileName);
 bool WriteToFile(char* fileNameCStr, char* text, uint64 textLen, bool overwrite, int32 writeStart = 0);
 
 void CopyToClipboard(const char* text, size_t len);
+void CopyToClipboard(string text);
 char* GetClipboardText();
 string GetClipboardTextAsString();
 

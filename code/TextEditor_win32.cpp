@@ -35,12 +35,16 @@ ScreenBuffer screenBuffer;
 global_variable BITMAPINFO bitmapInfo;
 global_variable bool running;
 
-wchar* CStrToWStr(const char* c)
+wchar* CStrToWStr(const char* c, int len)
 {
-    const size_t cSize = StringLen(c) + 1;
-    wchar* wc = HeapAlloc(wchar, cSize);
-    mbstowcs_s(0, wc, cSize, c, cSize + 1);
+    wchar* wc = HeapAlloc(wchar, len + 1);
+    mbstowcs_s(0, wc, len + 1, c, len);
     return wc;
+}
+
+inline wchar* CStrToWStr(const char* c)
+{
+    return CStrToWStr(c, StringLen(c));
 }
 
 inline uint32 SafeTruncateSize32(uint64 val)
@@ -233,6 +237,37 @@ void CopyToClipboard(const char* text, size_t len)
     wchar* wideText = CStrToWStr(text); 
     memcpy(lptstrCopy, wideText, len * sizeof(wchar)); 
     lptstrCopy[len] = (wchar)0;    // null character 
+    free(wideText);
+    GlobalUnlock(hglbCopy); 
+
+    SetClipboardData(CF_UNICODETEXT, hglbCopy); 
+
+    CloseClipboard(); 
+}
+
+void CopyToClipboard(string text)
+{
+    LPTSTR lptstrCopy; 
+    HGLOBAL hglbCopy; 
+
+    //Should this maybe return error??? When would not opening the clipboard happen???
+    if (!OpenClipboard(NULL)) 
+        return; 
+
+    EmptyClipboard();
+
+    hglbCopy = GlobalAlloc(GMEM_MOVEABLE, (text.len + 1) * sizeof(wchar)); 
+    if (hglbCopy == NULL) 
+    { 
+        //Should this maybe return error??? 
+        CloseClipboard(); 
+        return; 
+    }
+
+    lptstrCopy = (LPTSTR)GlobalLock(hglbCopy);
+    wchar* wideText = CStrToWStr(text.str, text.len); 
+    memcpy(lptstrCopy, wideText, text.len * sizeof(wchar)); 
+    lptstrCopy[text.len] = (wchar)0;    // null character 
     free(wideText);
     GlobalUnlock(hglbCopy); 
 

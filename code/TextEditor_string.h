@@ -33,6 +33,11 @@ inline string SubString(char* cstr, int start, int end = -1)
     return SubString(cstring(cstr), start, end);
 }
 
+inline string SubStringAt(string s, int at, int len)
+{
+    return string{s.str + at, len};
+}
+
 bool StringContains(string s, string target);
 inline bool StringContains(char* cstr, string target) 
 { 
@@ -73,7 +78,7 @@ inline int CharCount(char c, char* s)
 struct string_buf
 {
     char* str;
-    size_t len;
+    int len;
     size_t cap;
 
     char operator[](int index) { return str[index]; }
@@ -118,6 +123,17 @@ inline string_buf init_string_buf(size_t capacity = 128)
 {
     return init_string_buf(lstring(""), capacity);
 }
+
+void StringBuf_RangeRemove(string_buf* buf, int start, int end);
+void StringBuf_RemoveStringAt(string_buf* buf, int at, int len);
+
+void StringBuf_InsertString(string_buf* buf, string insert, int at);
+inline void StringBuf_InsertString(string_buf* buf, char* cstr, int at)
+{
+    StringBuf_InsertString(buf, cstring(cstr), at);
+}
+
+void StringBuf_RemoveAt(string_buf* buf, int at);
 
 
 inline int StringLen(const char* string)
