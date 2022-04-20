@@ -140,6 +140,14 @@ void StringBuf_RemoveAt(string_buf* buf, int at)
 }
 
 
+
+wchar* CStrToWStr(const char* c, int len)
+{
+    wchar* wc = HeapAlloc(wchar, len + 1);
+    mbstowcs_s(0, wc, len + 1, c, len);
+    return wc;
+}
+
 void IntToString(int val, char* buffer)
 {
 	char* at = buffer;

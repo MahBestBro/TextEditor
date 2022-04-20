@@ -37,6 +37,7 @@ UserSettings LoadUserSettingsFromConfigFile()
     UserSettings result = {};
 
     char* file = ReadEntireFileAsCstr("config/config_general.txt");
+    Print(__FILE__"\n");
     Assert(file);
 
     int numLines = 0;

@@ -587,12 +587,10 @@ void SaveFile(string fileName)
     for (int i = 0; i < writeSectionStart.line * (overwrite); ++i)
         writeStart += editor.lines[i].len + 2; //TODO: Make UNIX compatible
     
-    char* fileNameCStr = fileName.cstring();
-    
     EditorPos writeSectionEnd = {editor.lines[editor.numLines - 1].len, editor.numLines - 1};
     TextSectionInfo writeTextSection = GetTextSectionInfo(writeSectionStart, writeSectionEnd);
     string_buf textToWrite = GetMultilineText(writeTextSection, true);
-    if(WriteToFile(fileNameCStr, textToWrite.str, textToWrite.len, overwrite, writeStart))
+    if(WriteToFile(fileName, textToWrite.toStr(), overwrite, writeStart))
     {
         if (!overwrite) editor.fileName = fileName;
     }
@@ -601,7 +599,6 @@ void SaveFile(string fileName)
         //Log
     }
 
-    free(fileNameCStr);
     textToWrite.dealloc();
 
     editor.topChangedLineIndex = -1;
@@ -1157,7 +1154,7 @@ void CopyHighlightedText()
 
 void Paste()
 {
-    string textToPaste = GetClipboardTextAsString();
+    string textToPaste = GetClipboardText();
     if (textToPaste.str != nullptr)
     {
         AddToUndoStack(editor.cursorPos, editor.cursorPos, UNDOTYPE_ADDED_TEXT);
@@ -1207,8 +1204,8 @@ void CutHighlightedText()
 //TODO: Resize editor.lines if file too big + maybe return success bool?
 void OpenFile()
 {
-    int fileNameLen = 0;
-    char* fileName = ShowFileDialogAndGetFileName(false, &fileNameLen);
+    //Allocating twice on heap here, don't think it should be massive performance hit but kinda sketchy
+    string fileName = ShowFileDialogAndGetFileName(false);
     string file = ReadEntireFileAsString(fileName);
     if (file.str)
     {
@@ -1232,7 +1229,7 @@ void OpenFile()
             file.str++;
         }
 
-        free(fileName);
+        free(fileName.str);
         FreeWin32(file.str);
 
         ResetUndoStack();
@@ -1247,9 +1244,12 @@ void OpenFile()
 
 void SaveAs()
 {
-	int fileNameLen = 0;
-	char* fileName = ShowFileDialogAndGetFileName(true, &fileNameLen);
-    SaveFile(string{fileName, fileNameLen});
+	string fileName = ShowFileDialogAndGetFileName(true);
+    if (fileName.str)
+    {
+        SaveFile(fileName);
+        free(fileName.str);
+    }
 }
 
 void Save()

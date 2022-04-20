@@ -121,14 +121,12 @@ inline void* dbg_malloc(size_t size, const char* file, int line)
 void FreeWin32(void* memory);
 
 char* ReadEntireFileAsCstr(char* fileName, uint32* fileLen = nullptr);
-string ReadEntireFileAsString(char* fileName);
-bool WriteToFile(char* fileNameCStr, char* text, uint64 textLen, bool overwrite, int32 writeStart = 0);
+string ReadEntireFileAsString(string fileName);
+bool WriteToFile(string fileName, string text, bool overwrite, int32 writeStart = 0);
 
-void CopyToClipboard(const char* text, size_t len);
 void CopyToClipboard(string text);
-char* GetClipboardText();
-string GetClipboardTextAsString();
+string GetClipboardText();
 
-char* ShowFileDialogAndGetFileName(bool save, int* fileNameLen = 0);
+string ShowFileDialogAndGetFileName(bool save);
 
 #endif

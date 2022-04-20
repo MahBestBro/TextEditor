@@ -213,6 +213,12 @@ inline bool IsEmptyString(char* str)
     return str[0] == 0;
 }
 
+wchar* CStrToWStr(const char* c, int len);
+inline wchar* CStrToWStr(const char* c)
+{
+    return CStrToWStr(c, StringLen(c));
+}
+
 void IntToString(int val, char* buffer);
 int StringToInt(char* str, int len, bool* success = nullptr);
 byte StringToByte(char* str, int len, bool* success = nullptr);

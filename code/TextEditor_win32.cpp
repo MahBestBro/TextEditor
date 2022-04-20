@@ -35,18 +35,6 @@ ScreenBuffer screenBuffer;
 global_variable BITMAPINFO bitmapInfo;
 global_variable bool running;
 
-wchar* CStrToWStr(const char* c, int len)
-{
-    wchar* wc = HeapAlloc(wchar, len + 1);
-    mbstowcs_s(0, wc, len + 1, c, len);
-    return wc;
-}
-
-inline wchar* CStrToWStr(const char* c)
-{
-    return CStrToWStr(c, StringLen(c));
-}
-
 inline uint32 SafeTruncateSize32(uint64 val)
 {
     //TODO: Defines for max values
@@ -62,23 +50,33 @@ void Print(const char* message)
     free(msg);
 }
 
+internal void win32_LogError()
+{
+    DWORD errCode = GetLastError();
+    char errMsg[128];
+    snprintf(errMsg, sizeof(errMsg), "Error Code: %8x\n", errCode);
+    Print(errMsg);
+}
+
 void FreeWin32(void* mem)
 {
     VirtualFree(mem, 0, MEM_RELEASE);
 }
 
-string ReadEntireFileAsString(char* fileName)
+string ReadEntireFileAsString(string fileName)
 {
     string result = {0};
 
+    char* fileNameCStr = fileName.cstring();
     HANDLE fileHandle = CreateFileA(
-        fileName, 
+        fileNameCStr, 
         GENERIC_READ, 
         FILE_SHARE_READ, 
         0, 
         OPEN_EXISTING, 
         0, 0
     );
+    free(fileNameCStr);
 
     if (fileHandle != INVALID_HANDLE_VALUE)
     {
@@ -116,17 +114,18 @@ string ReadEntireFileAsString(char* fileName)
     else
     {
         //Log
+        win32_LogError();
     }
 
     return result;
 }
 
-char* ReadEntireFileAsCstr(char* fileName, uint32* fileLen)
+char* ReadEntireFileAsCstr(char* fileNameCStr, uint32* fileLen)
 {
     char* result = nullptr;
 
     HANDLE fileHandle = CreateFileA(
-        fileName, 
+        fileNameCStr, 
         GENERIC_READ, 
         FILE_SHARE_READ, 
         0, 
@@ -174,27 +173,31 @@ char* ReadEntireFileAsCstr(char* fileName, uint32* fileLen)
     else
     {
         //Log
+        win32_LogError();
+        
     }
 
     return result;
 }
 
-bool WriteToFile(char* fileNameCStr, char* text, uint64 textLen, bool overwrite, int32 writeStart)
+bool WriteToFile(string fileName, string text, bool overwrite, int32 writeStart)
 {
     bool result = false;
 
+    char* fileNameCStr = fileName.cstring();
     DWORD creationDisposition = (overwrite) ? OPEN_EXISTING : CREATE_ALWAYS;
     HANDLE fileHandle = CreateFileA(fileNameCStr, GENERIC_WRITE, 0, 0, creationDisposition, 0, 0);
+    free(fileNameCStr);
     if (fileHandle != INVALID_HANDLE_VALUE)
     {
         Assert(writeStart >= 0);
         //TODO: make possible for large changes
         SetFilePointer(fileHandle, writeStart, NULL, FILE_BEGIN);
         DWORD bytesWritten;
-        if(WriteFile(fileHandle, text, (DWORD)textLen, &bytesWritten, 0))
+        if(WriteFile(fileHandle, text.str, (DWORD)text.len, &bytesWritten, 0))
         {
             //File written Successfully!
-            result = (bytesWritten == textLen);
+            result = (bytesWritten == (DWORD)text.len);
             if(!SetEndOfFile(fileHandle))
             {
                 //Log
@@ -212,37 +215,6 @@ bool WriteToFile(char* fileNameCStr, char* text, uint64 textLen, bool overwrite,
     }
 
     return result;
-}
-
-void CopyToClipboard(const char* text, size_t len)
-{
-    LPTSTR lptstrCopy; 
-    HGLOBAL hglbCopy; 
-
-    //Should this maybe return error??? When would not opening the clipboard happen???
-    if (!OpenClipboard(NULL)) 
-        return; 
-
-    EmptyClipboard();
-
-    hglbCopy = GlobalAlloc(GMEM_MOVEABLE, (len + 1) * sizeof(wchar)); 
-    if (hglbCopy == NULL) 
-    { 
-        //Should this maybe return error??? 
-        CloseClipboard(); 
-        return; 
-    }
-
-    lptstrCopy = (LPTSTR)GlobalLock(hglbCopy);
-    wchar* wideText = CStrToWStr(text); 
-    memcpy(lptstrCopy, wideText, len * sizeof(wchar)); 
-    lptstrCopy[len] = (wchar)0;    // null character 
-    free(wideText);
-    GlobalUnlock(hglbCopy); 
-
-    SetClipboardData(CF_UNICODETEXT, hglbCopy); 
-
-    CloseClipboard(); 
 }
 
 void CopyToClipboard(string text)
@@ -277,34 +249,7 @@ void CopyToClipboard(string text)
 }
 
 //TODO: If we decide to fully support unicode, have this return wchar*
-char* GetClipboardText()
-{
-    HGLOBAL hglb; 
-    LPTSTR lptstr; 
-
-    if (!OpenClipboard(NULL)) 
-        return nullptr;
-
-    char* result = nullptr;
-    hglb = GetClipboardData(CF_UNICODETEXT);
-    if (hglb != NULL) 
-    {   
-        lptstr = (wchar*)GlobalLock(hglb); 
-        if (lptstr != NULL) 
-        { 
-            size_t len = wcslen(lptstr);
-            result = HeapAlloc(char, len + 1);
-            wcstombs_s(0, result, len + 1, lptstr, len);
-            result[len] = 0;
-            GlobalUnlock(hglb); 
-        }
-    }
-
-    CloseClipboard();
-    return result;
-}
-
-string GetClipboardTextAsString()
+string GetClipboardText()
 {
     HGLOBAL hglb; 
     LPTSTR lptstr; 
@@ -332,12 +277,12 @@ string GetClipboardTextAsString()
 }
 
 //TODO: This thing doesn't always work, it's probably going to suck but you may have to do it the reccomended way
-char* ShowFileDialogAndGetFileName(bool save, int* fileNameLen)
+string ShowFileDialogAndGetFileName(bool save)
 {
-    char* result = nullptr;
+    string result = {0};
 
     OPENFILENAME ofn = {0};     // common dialog box structure
-    wchar chosenFileName[256];   // buffer for file name
+    wchar chosenFileName[256];  // buffer for file name //TODO: CHECK FOR BUFFER OVERFLOW
     chosenFileName[0] = 0;      // this ensures GetOpenFileName does not use the contents of szFile to initialize itself.
 
     // Initialize OPENFILENAME
@@ -349,17 +294,16 @@ char* ShowFileDialogAndGetFileName(bool save, int* fileNameLen)
     ofn.lpstrFileTitle = NULL;
     ofn.nMaxFileTitle = 0;
     ofn.lpstrInitialDir = NULL;
-    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
 
     // Display the Open dialog box. 
     BOOL succeeded = (save) ? GetSaveFileName(&ofn) : GetOpenFileName(&ofn);
     if (succeeded)
     {
         int len = (int)wcslen(chosenFileName);
-        result = HeapAlloc(char, len + 1);
-        wcstombs_s(0, result, len + 1, chosenFileName, len);
-        result[len] = 0;
-        if (fileNameLen) *fileNameLen = len;
+        result.str = HeapAlloc(char, len + 1);
+        wcstombs_s(0, result.str, len + 1, chosenFileName, len);
+        result.len = len;
     } 
 
     //NOTE: This is to prevent input not updating properly. Maybe find better approach idk
