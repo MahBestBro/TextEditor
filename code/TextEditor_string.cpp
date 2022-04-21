@@ -84,6 +84,51 @@ int CharCount(char c, string s)
     return result;
 }
 
+string AdvanceToCharAndSplitString(string* src, char target)
+{
+    string result = {src->str, 0};
+    
+	int poppedLen;
+    for (poppedLen = 0; poppedLen < src->len && (*src)[0] != target; ++poppedLen)
+        src->str++;
+	src->len -= (*src)[0] == target;
+	src->str += (*src)[0] == target;
+	
+    result.len = poppedLen;
+    src->len -= poppedLen;
+
+    return result;
+}
+
+string GetNextLine(string* src)
+{
+    string result = AdvanceToCharAndSplitString(src, '\n');
+    result.len -= (result.str && result[result.len - 1] == '\r');
+    return result;
+}
+
+//TODO: Check that 0 < byte < BYTE_MAX
+byte StringToByte(string src, bool* success)
+{
+    byte result = 0;
+    byte powOf10 = 1;
+    for (int i = src.len - 1; i >= 0; --i)
+    {
+        byte digit = src[i] - '0';
+        if (digit < 0 || digit > 9)
+        {
+            if (success) *success = false;
+            return 0;
+        }
+            
+        result += digit * powOf10;
+        powOf10 *= 10;
+    }
+
+    if (success) *success = true;
+    return result;
+}
+
 
 void string_buf::dealloc()
 {
@@ -251,26 +296,5 @@ char** SplitStringByLines(char* str, int* len)
     }
         
     if (len) *len = numStrings;
-    return result;
-}
-
-char* AdvanceToNextLine(char* file)
-{
-    while (file[0] != '\n') 
-    {
-        if (file[0] == 0)
-            return nullptr;
-        file++;
-    }
-    file++;
-    return file;
-}
-
-char* ReverseString(char* str, int len)
-{
-    char* result = HeapAlloc(char, len);
-    for (int i = 0; i < len; ++i)
-        result[len - i - 1] = str[i];
-    result[len] = 0;
     return result;
 }

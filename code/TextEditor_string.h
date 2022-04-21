@@ -213,6 +213,16 @@ inline bool IsEmptyString(char* str)
     return str[0] == 0;
 }
 
+inline string AdvanceString(string s, int advance)
+{
+    return (advance < s.len) ? string{s.str + advance, s.len - advance} : string{0, 0};
+}
+
+string AdvanceToCharAndSplitString(string* src, char target);
+string GetNextLine(string* src);
+byte StringToByte(string src, bool* success);
+
+
 wchar* CStrToWStr(const char* c, int len);
 inline wchar* CStrToWStr(const char* c)
 {

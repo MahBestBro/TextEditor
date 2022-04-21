@@ -4,48 +4,20 @@
 #include "TextEditor_meta.h"
 #include "TextEditor_config.h"
 
-char* AdvanceOnePastChar(char* str, char target, __Out int* len = 0)
-{
-    int resultLen = 0;
-    while (str[0] && str[0] != target)
-    {
-        str++;
-        resultLen++;
-    }
-    if (str[0]) str++;
- 
-    if (len) *len = resultLen;
-    return str;
-}
-
-char* AdvanceToCharAndGetString(char* str, char target, __Out int* len)
-{
-    char* result = str;
-    int resultLen = 0;
-    while (str[0] && str[0] != target)
-    {
-        str++;
-        resultLen++;
-    }
- 
-    *len = resultLen;
-    return result;
-}
-
 UserSettings LoadUserSettingsFromConfigFile()
 {
     UserSettings result = {};
 
-    char* file = ReadEntireFileAsCstr("config/config_general.txt");
-    Print(__FILE__"\n");
-    Assert(file);
+    string file = ReadEntireFileAsString(lstring("config/config_general.txt"));
+    Assert(file.str);
 
-    int numLines = 0;
-    char** lines = SplitStringByLines(file, &numLines); //@Cleanup
-    for (int i = 0; i < numLines; ++i)
+    //int numLines = 0;
+    //char** lines = SplitStringByLines(file, &numLines); //@Cleanup
+    string line = GetNextLine(&file);
+    for (int i = 0; line.len > 0; ++i)
     {
         MemberMetaData memberData = UserSettingsMemberMetaData[i];
-        char* val = AdvanceOnePastChar(lines[i], ' ');
+        string val = SubString(line, IndexOfCharInString(line, ' ') + 1);
 
         switch(memberData.type)
         {
@@ -53,21 +25,18 @@ UserSettings LoadUserSettingsFromConfigFile()
             {
                 Colour colour;
 
-                int offset = 0;
+                //int offset = 0;
                 bool success = true;
 
-                char* rStr = AdvanceToCharAndGetString(val, ',', &offset);
-                byte r = StringToByte(rStr, offset, &success);
+                byte r = StringToByte(AdvanceToCharAndSplitString(&val, ','), &success);
                 Assert(success);
                 colour.r = r;
 
-                char* gStr = AdvanceToCharAndGetString(rStr + offset + 1, ',', &offset);
-                byte g = StringToByte(gStr, offset, &success);
+                byte g = StringToByte(AdvanceToCharAndSplitString(&val, ','), &success);
                 Assert(success);
                 colour.g = g;
 
-                char* bStr = AdvanceToCharAndGetString(gStr + offset + 1, ',', &offset);
-                byte b = StringToByte(bStr, offset, &success);
+                byte b = StringToByte(AdvanceToCharAndSplitString(&val, ','), &success);
                 Assert(success);
                 colour.b = b;
 
@@ -78,26 +47,21 @@ UserSettings LoadUserSettingsFromConfigFile()
             {
                 ColourRGBA colour;
 
-                int offset = 0;
                 bool success = true;
 
-                char* rStr = AdvanceToCharAndGetString(val, ',', &offset);
-                byte r = StringToByte(rStr, offset, &success);
+                byte r = StringToByte(AdvanceToCharAndSplitString(&val, ','), &success);
                 Assert(success);
                 colour.r = r;
 
-                char* gStr = AdvanceToCharAndGetString(rStr + offset + 1, ',', &offset);
-                byte g = StringToByte(gStr, offset, &success);
+                byte g = StringToByte(AdvanceToCharAndSplitString(&val, ','), &success);
                 Assert(success);
                 colour.g = g;
 
-                char* bStr = AdvanceToCharAndGetString(gStr + offset + 1, ',', &offset);
-                byte b = StringToByte(bStr, offset, &success);
+                byte b = StringToByte(AdvanceToCharAndSplitString(&val, ','), &success);
                 Assert(success);
                 colour.b = b;
 
-                char* aStr = AdvanceToCharAndGetString(bStr + offset + 1, ',', &offset);
-                byte a = StringToByte(aStr, offset, &success);
+                byte a = StringToByte(AdvanceToCharAndSplitString(&val, ','), &success);
                 Assert(success);
                 colour.a = a;
 
@@ -114,13 +78,15 @@ UserSettings LoadUserSettingsFromConfigFile()
                 UNIMPLEMENTED("TODO: Implement once needed")
             } break;
         }
+
+        line = GetNextLine(&file);
     }
 
-    for (int i = 0; i < numLines; ++i)
-        free(lines[i]);
-    free(lines);
+    //for (int i = 0; i < numLines; ++i)
+    //    free(lines[i]);
+    //free(lines);
 
-    FreeWin32(file);
+    FreeWin32(file.str);
 
     return result;
 }
