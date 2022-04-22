@@ -38,6 +38,7 @@ enum MultilineState
     MS_COMMENT
 };
 
+//TODO: Add EditorPos member to make look ups easier
 struct Token
 {
     int line;

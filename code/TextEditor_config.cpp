@@ -11,10 +11,8 @@ UserSettings LoadUserSettingsFromConfigFile()
     string file = ReadEntireFileAsString(lstring("config/config_general.txt"));
     Assert(file.str);
 
-    //int numLines = 0;
-    //char** lines = SplitStringByLines(file, &numLines); //@Cleanup
     string line = GetNextLine(&file);
-    for (int i = 0; line.len > 0; ++i)
+    for (int i = 0; line[0]; ++i)
     {
         MemberMetaData memberData = UserSettingsMemberMetaData[i];
         string val = SubString(line, IndexOfCharInString(line, ' ') + 1);
@@ -81,10 +79,6 @@ UserSettings LoadUserSettingsFromConfigFile()
 
         line = GetNextLine(&file);
     }
-
-    //for (int i = 0; i < numLines; ++i)
-    //    free(lines[i]);
-    //free(lines);
 
     FreeWin32(file.str);
 

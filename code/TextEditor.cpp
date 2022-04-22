@@ -240,7 +240,6 @@ void Draw8bppPixels(Rect rect, byte* pixels, int stride, Colour colour, Rect lim
     }
 }
 
-//TODO: Make this non c-string dependent
 void DrawText(string text, int xCoord, int yCoord, Colour colour, Rect limits = {0})
 { 
 	int xAdvance = 0;
@@ -284,6 +283,8 @@ void ClearHighlights()
 
 void AdvanceCursorToEndOfWord(bool forward)
 {
+	if (editor.lines[editor.cursorPos.line].len == 0) return; //This happens when you go form the end of one line down to an empty line
+
     string_buf line = editor.lines[editor.cursorPos.line];
     
     bool (*ShouldAdvance)(char) = nullptr;
@@ -294,7 +295,7 @@ void AdvanceCursorToEndOfWord(bool forward)
         if (!IsWhiteSpace(line[editor.cursorPos.textAt - !forward]))
             skipOverSpace = false;
         
-        if (!skipOverSpace)
+        if (!skipOverSpace && ShouldAdvance == nullptr)
         {
             ShouldAdvance = (IsPunctuation(line[editor.cursorPos.textAt - !forward])) ?
                              IsPunctuation : IsAlphaNumeric;
@@ -483,7 +484,6 @@ void AddToUndoStack(EditorPos undoStart, EditorPos undoEnd, UndoType type, bool 
     undo.type = type;
     if (type == UNDOTYPE_REMOVED_TEXT_SECTION || type == UNDOTYPE_OVERWRITE)
     {
-        //TODO: remove all the outside code that sets numLines for us that isn't necessary
         TextSectionInfo section = GetTextSectionInfo(undoStart, undoEnd);
 		if (fillBuffer)
 		{
@@ -717,7 +717,6 @@ void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
                     StringBuf_RangeRemove(&editor.lines[lineIndex], 
                                           sectionInfo.top.textAt, 
                                           i - removeStart);
-                    //RemoveTextInLine(lineIndex, sectionInfo.top.textAt, i - removeStart);
                     removeStart = i + 1;
                     lineIndex++;
                 }
@@ -792,6 +791,23 @@ void HighlightWordAt(EditorPos pos)
 	editor.cursorPos = {newCursorTextAt, pos.line};
 }
 
+//void GetTokenAtPos(EditorPos pos)
+//{
+//    Token result = {-1, string{0, 0}, TOKEN_UNKNOWN};
+//
+//    int tokenLengthSum = 0;
+//    for (int i = 0; i < tokenInfo.numTokens; ++i)
+//    {
+//        if (tokenInfo[i].line > pos.line) break;
+//
+//        if (tokenInfo[i].line == pos.line)
+//        {
+//            tokenLengthSum += 
+//            if ()
+//        }
+//    }
+//}
+
 //
 //KEY-MAPPED FUNCTIONS
 //
@@ -802,7 +818,7 @@ void AddChar()
     char charAtCursor = (*line)[editor.cursorPos.textAt];
     char prevChar = (*line)[editor.cursorPos.textAt - 1];
 
-    //TODO: This won't allow typing backwards brackets inside brackets, fix this by tracking prev input code
+    //TODO: Track nested brackets??
     if (IsBackwardsBracket(editor.currentChar) && IsBackwardsBracket(charAtCursor) && 
         IsForwardsBracket(prevChar))
     {
@@ -862,7 +878,16 @@ void AddChar()
         case '\'':
         case '"':
         {
-            numCharsAdded = 2;
+            //numCharsAdded = 1;
+            //textToInsert[0] = editor.currentChar;
+            //
+            //if (editor.currentChar == '"' || GetTokenAtPos(editor.cursorPos).type != TOKEN_COMMENT)
+            //{
+            //    textToInsert[1] = editor.currentChar;
+            //    addedTwoCharacters = true;
+            //}
+
+            numCharsAdded = 1;
             textToInsert[0] = editor.currentChar;
             textToInsert[1] = editor.currentChar;
             addedTwoCharacters = true;
@@ -873,7 +898,7 @@ void AddChar()
             numCharsAdded = 1;
             textToInsert[0] = editor.currentChar;
         } break;
-    }
+    } 
     Assert(numCharsAdded > 0);
     textToInsert[numCharsAdded] = 0;
     StringBuf_InsertString(&editor.lines[editor.cursorPos.line], 
@@ -1211,26 +1236,20 @@ void OpenFile()
     {
         editor.fileName = fileName;
 
+        char* startOfFile = file.str;
+
         editor.numLines = 0;
-        char* startOfLine = file.str;
-        while(true)
+        string line = GetNextLine(&file);
+        while(line[0])
         {
-            if (file[0] == '\n' || !file[0])
-            {
-                int lineLen = (int)(file.str - startOfLine) - ((file.str - 1)[0] == '\r');
-                editor.lines[editor.numLines] = string{startOfLine, lineLen};
-                //memcpy(editor.lines[editor.numLines].text, startOfLine, lineLen);
-                //editor.lines[editor.numLines].len = lineLen;
-                //editor.lines[editor.numLines].text[lineLen] = 0;
-                editor.numLines++;
-                if (!file[0]) break;
-                startOfLine = file.str + 1;
-            }
-            file.str++;
+            editor.lines[editor.numLines] = line;
+            editor.numLines++;
+
+            line = GetNextLine(&file);
         }
 
         free(fileName.str);
-        FreeWin32(file.str);
+        FreeWin32(startOfFile);
 
         ResetUndoStack();
         ResetUndoStack(true);
