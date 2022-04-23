@@ -791,22 +791,24 @@ void HighlightWordAt(EditorPos pos)
 	editor.cursorPos = {newCursorTextAt, pos.line};
 }
 
-//void GetTokenAtPos(EditorPos pos)
-//{
-//    Token result = {-1, string{0, 0}, TOKEN_UNKNOWN};
-//
-//    int tokenLengthSum = 0;
-//    for (int i = 0; i < tokenInfo.numTokens; ++i)
-//    {
-//        if (tokenInfo[i].line > pos.line) break;
-//
-//        if (tokenInfo[i].line == pos.line)
-//        {
-//            tokenLengthSum += 
-//            if ()
-//        }
-//    }
-//}
+Token GetTokenAtCursor()
+{
+    for (int i = 0; i < tokenInfo.numTokens; ++i)
+    {
+        Token token = tokenInfo.tokens[i]; 
+
+        if (token.at.line > editor.cursorPos.line) break;
+
+        if (token.at.line == editor.cursorPos.line)
+        {
+            int tokenEnd = token.at.textAt + token.text.len;
+            if (InRange(editor.cursorPos.textAt, token.at.textAt, tokenEnd))
+                return tokenInfo.tokens[i];
+        }
+    }
+
+    return Token{EditorPos{-1, -1}, string{0, 0}, TOKEN_UNKNOWN};
+}
 
 //
 //KEY-MAPPED FUNCTIONS
@@ -874,23 +876,20 @@ void AddChar()
             addedTwoCharacters = true;
         } break;
 
-        //TODO: Have ' only add one char if in comment
         case '\'':
         case '"':
         {
-            //numCharsAdded = 1;
-            //textToInsert[0] = editor.currentChar;
-            //
-            //if (editor.currentChar == '"' || GetTokenAtPos(editor.cursorPos).type != TOKEN_COMMENT)
-            //{
-            //    textToInsert[1] = editor.currentChar;
-            //    addedTwoCharacters = true;
-            //}
-
             numCharsAdded = 1;
             textToInsert[0] = editor.currentChar;
-            textToInsert[1] = editor.currentChar;
-            addedTwoCharacters = true;
+            
+            Token tokenAtCursor = GetTokenAtCursor();
+            if (tokenAtCursor.type != TOKEN_STRING && 
+                (editor.currentChar == '"' || tokenAtCursor.type != TOKEN_COMMENT))
+            {
+                numCharsAdded++;
+                textToInsert[1] = editor.currentChar;
+                addedTwoCharacters = true;
+            }
         } break;
 
         default:
@@ -1637,21 +1636,21 @@ void Draw(float dt)
 
             //if (!token.text.str) continue;
 
-			bool prevTokenOnSameLine = t > 0 && tokenInfo.tokens[t - 1].line == token.line;
+			bool prevTokenOnSameLine = t > 0 && tokenInfo.tokens[t - 1].at.line == token.at.line;
 			bool nextTokenOnSameLine = t < tokenInfo.numTokens - 1 && 
-                                       tokenInfo.tokens[t + 1].line == token.line;
+                                       tokenInfo.tokens[t + 1].at.line == token.at.line;
 
             //Draw text
             if (t == 0 || !prevTokenOnSameLine)
                 x = start.x - editor.textOffset.x;
-            int y = start.y - token.line * CURSOR_HEIGHT + editor.textOffset.y;
+            int y = start.y - token.at.line * CURSOR_HEIGHT + editor.textOffset.y;
 
             //Draw whitespace at front of line
 			if (!prevTokenOnSameLine)
             {
                 //Draw Line num
                 char lineNumText[8]; //TODO: Calculate how many lines we want max cause fucking ey this will likely go to shit
-                IntToString(token.line + 1, lineNumText);
+                IntToString(token.at.line + 1, lineNumText);
                 DrawText(cstring(lineNumText), 
                          start.x - LINE_NUM_OFFSET, 
                          y, 
@@ -1660,8 +1659,8 @@ void Draw(float dt)
 
                 if (token.text.str) //TODO: Investigate whether this check is really necessary
                 {
-                    int whitespaceLen = (int)(token.text.str - editor.lines[token.line].str);
-				    x += TextPixelLength(editor.lines[token.line].str, whitespaceLen);
+                    int whitespaceLen = (int)(token.text.str - editor.lines[token.at.line].str);
+				    x += TextPixelLength(editor.lines[token.at.line].str, whitespaceLen);
                 }
             }
 

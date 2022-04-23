@@ -41,7 +41,7 @@ enum MultilineState
 //TODO: Add EditorPos member to make look ups easier
 struct Token
 {
-    int line;
+    EditorPos at;
     string text;
     TypeOfToken type;
 };
