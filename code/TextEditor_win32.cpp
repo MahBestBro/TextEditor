@@ -11,22 +11,25 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H 
 
+
 #include "TextEditor_defs.h"
+#include "TextEditor_alloc.h"
 #include "TextEditor_input.h"
 #include "TextEditor.h"
 #include "TextEditor_string.h"
 #include "TextEditor_meta.h"
 #include "TextEditor_config.h"
 #include "TextEditor_tokeniser.h"
-//#include "TextEditor_string_hash_set.h"
 
+#include "TextEditor_alloc.cpp"
 #include "TextEditor_input.cpp"
 #include "TextEditor.cpp"
 #include "TextEditor_string.cpp"
 #include "TextEditor_meta.cpp"
 #include "TextEditor_config.cpp"
 #include "TextEditor_tokeniser.cpp"
-//#include "TextEditor_string_hash_set.cpp"
+
+
 
 Input input = {};
 FontChar fontChars[128];
@@ -47,7 +50,6 @@ void Print(const char* message)
 {
     wchar* msg = CStrToWStr(message);
     OutputDebugString(msg);
-    free(msg);
 }
 
 internal void win32_LogError()
@@ -237,10 +239,8 @@ void CopyToClipboard(string text)
     }
 
     lptstrCopy = (LPTSTR)GlobalLock(hglbCopy);
-    wchar* wideText = CStrToWStr(text.str, text.len); 
-    memcpy(lptstrCopy, wideText, text.len * sizeof(wchar)); 
+    memcpy(lptstrCopy, CStrToWStr(text.str, text.len), text.len * sizeof(wchar)); 
     lptstrCopy[text.len] = (wchar)0;    // null character 
-    free(wideText);
     GlobalUnlock(hglbCopy); 
 
     SetClipboardData(CF_UNICODETEXT, hglbCopy); 
@@ -265,7 +265,7 @@ string GetClipboardText()
         if (lptstr != NULL) 
         { 
             result.len = (int)wcslen(lptstr);
-            result.str = HeapAlloc(char, result.len + 1);
+            result.str = (char*)StringArena_Alloc(result.len + 1);
             wcstombs_s(0, result.str, result.len + 1, lptstr, result.len);
             //result[len] = 0;
             GlobalUnlock(hglb); 
@@ -301,7 +301,7 @@ string ShowFileDialogAndGetFileName(bool save)
     if (succeeded)
     {
         int len = (int)wcslen(chosenFileName);
-        result.str = HeapAlloc(char, len + 1);
+        result.str = (char*)StringArena_Alloc(len + 1);
         wcstombs_s(0, result.str, len + 1, chosenFileName, len);
         result.len = len;
     } 
@@ -357,7 +357,6 @@ void win32_LogInput(InputCode code)
         swprintf_s(inputLog, L"%s ARROW KEY", codeStr);
     else
         swprintf_s(inputLog, L"%s KEY", codeStr);
-    free(codeStr);
 
     wchar log[64];
     if (InputDown(input.flags[code]))
@@ -533,6 +532,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         int windowHeight = windowRect.bottom - windowRect.top;
         win32_UpdateWindow(hdc, /*&windowRect,*/ 0, 0, windowWidth, windowHeight);
         ReleaseDC(hwnd, hdc);
+
+        FlushStringArena();
     }
     return 0;
 }

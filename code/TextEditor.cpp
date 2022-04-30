@@ -11,6 +11,7 @@
 #define PIXELS_UNDER_BASELINE 5
 #define LINE_NUM_OFFSET ((fontChars[' '].advance) * 4)
 
+//extern StringArena temporaryStringArena;
 extern Input input;
 extern FontChar fontChars[128];
 extern ScreenBuffer screenBuffer;
@@ -392,11 +393,11 @@ void SetTopChangedLine(int newLineIndex)
         editor.topChangedLineIndex = editor.cursorPos.line;
 }
 
-string_buf GetMultilineText(TextSectionInfo sectionInfo, bool CRCL = false)
+string_buf __GetMultilineText(TextSectionInfo sectionInfo, bool CRCL = false, Allocator allocator = {})
 {
     const int numLines = sectionInfo.bottom.line - sectionInfo.top.line + 1;
     
-    string_buf result = init_string_buf();
+    string_buf result = init_string_buf(128, allocator);
 
     for (int i = 0; i < numLines; ++i)
     {
@@ -413,6 +414,16 @@ string_buf GetMultilineText(TextSectionInfo sectionInfo, bool CRCL = false)
     }
 
     return result;
+}
+
+inline string_buf GetMultilineText(TextSectionInfo sectionInfo, bool CRCL = false)
+{
+    return __GetMultilineText(sectionInfo, CRCL);
+}
+inline string_buf GetMultilineTextTemp(TextSectionInfo sectionInfo, bool CRCL = false)
+{
+    Allocator tempStringAllocator = {StringArena_Alloc, StringArena_Realloc, StringArena_Free};
+    return __GetMultilineText(sectionInfo, CRCL, tempStringAllocator);
 }
 
 void RemoveTextSection(TextSectionInfo sectionInfo)
@@ -589,7 +600,7 @@ void SaveFile(string fileName)
     
     EditorPos writeSectionEnd = {editor.lines[editor.numLines - 1].len, editor.numLines - 1};
     TextSectionInfo writeTextSection = GetTextSectionInfo(writeSectionStart, writeSectionEnd);
-    string_buf textToWrite = GetMultilineText(writeTextSection, true);
+    string_buf textToWrite = GetMultilineTextTemp(writeTextSection, true);
     if(WriteToFile(fileName, textToWrite.toStr(), overwrite, writeStart))
     {
         if (!overwrite) editor.fileName = fileName;
@@ -598,8 +609,6 @@ void SaveFile(string fileName)
     {
         //Log
     }
-
-    textToWrite.dealloc();
 
     editor.topChangedLineIndex = -1;
 }
@@ -1171,9 +1180,9 @@ void CopyHighlightedText()
 
     TextSectionInfo highlightInfo = GetTextSectionInfo(editor.highlightStart, 
                                                        editor.cursorPos);
-    string_buf copiedText = GetMultilineText(highlightInfo, true);
+    string_buf copiedText = GetMultilineTextTemp(highlightInfo, true);
     CopyToClipboard(copiedText.toStr());
-    copiedText.dealloc();
+    //copiedText.dealloc();
 }
 
 void Paste()
@@ -1202,8 +1211,6 @@ void Paste()
         InsertText(textToPaste, editor.cursorPos);
 
         editor.undoStack[editor.numUndos - 1].end = editor.cursorPos;
-
-        free(textToPaste.str);
 
         Tokenise(&tokenInfo); 
     } 
@@ -1247,7 +1254,6 @@ void OpenFile()
             line = GetNextLine(&file);
         }
 
-        free(fileName.str);
         FreeWin32(startOfFile);
 
         ResetUndoStack();
@@ -1263,11 +1269,7 @@ void OpenFile()
 void SaveAs()
 {
 	string fileName = ShowFileDialogAndGetFileName(true);
-    if (fileName.str)
-    {
-        SaveFile(fileName);
-        free(fileName.str);
-    }
+    if (fileName.str) SaveFile(fileName);
 }
 
 void Save()

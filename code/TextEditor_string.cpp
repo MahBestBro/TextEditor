@@ -129,10 +129,20 @@ byte StringToByte(string src, bool* success)
     return result;
 }
 
+void string_buf::resize()
+{
+    bool shouldRealloc = false;
+    while (len >= cap)
+    {
+        shouldRealloc = true;
+        cap *= 2;
+    }
+    if (shouldRealloc) str = (char*)allocator.Realloc(str, cap);
+}
 
 void string_buf::dealloc()
 {
-    free(str);
+    allocator.Free(str);
     len = 0;
     cap = 0;   
 }
@@ -145,10 +155,10 @@ char* string_buf::cstr()
     return result;
 }
 
-string_buf init_string_buf(string s, size_t capacity)
+string_buf init_string_buf(string s, size_t capacity, Allocator allocator)
 { 
-    string_buf result = {0, s.len, (capacity) ? capacity : s.len};
-    result.str = (char*)malloc(result.cap);
+    string_buf result = {0, s.len, (capacity) ? capacity : s.len, allocator};
+    result.str = (char*)allocator.Alloc(result.cap);
     memcpy(result.str, s.str, s.len);
     return result;
 }
@@ -188,7 +198,7 @@ void StringBuf_RemoveAt(string_buf* buf, int at)
 
 wchar* CStrToWStr(const char* c, int len)
 {
-    wchar* wc = HeapAlloc(wchar, len + 1);
+    wchar* wc = (wchar*)StringArena_Alloc((len + 1) * sizeof(wchar));
     mbstowcs_s(0, wc, len + 1, c, len);
     return wc;
 }

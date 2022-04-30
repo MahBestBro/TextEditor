@@ -1,4 +1,5 @@
 #include "TextEditor_dynarray.h"
+#include "TextEditor_alloc.h"
 
 #ifndef TEXT_EDITOR_STRING_H
 #define TEXT_EDITOR_STRING_H
@@ -75,23 +76,26 @@ inline int CharCount(char c, char* s)
     return CharCount(c, cstring(s));
 }
 
+//TODO: Have this work with multiple allocators (for temporaryStringArena)
 struct string_buf
 {
     char* str;
     int len;
     size_t cap;
+    Allocator allocator;
 
     char operator[](int index) { return str[index]; }
 
     void operator+=(char c)
     {
-        AppendToDynamicArray(str, len, c, cap);
+        str[len++] = c;
+        resize();
     }
 
     void operator+=(string s)
     {
         len += s.len;
-        ResizeDynamicArray(&str, len, 1, &cap);
+        resize();
         memcpy(str + len - s.len, s.str, s.len);
     }
     void operator+=(char* s) { *this += cstring(s); }
@@ -104,6 +108,7 @@ struct string_buf
     }
     void operator=(char* s) { *this = cstring(s); }
 
+    void resize();
     void dealloc();
 
     inline string toStr()
@@ -114,14 +119,14 @@ struct string_buf
     char* cstr();
 };
 
-string_buf init_string_buf(string s, size_t capacity = 0);
-inline string_buf init_string_buf(char* cstr, size_t capacity = 0)
+string_buf init_string_buf(string s, size_t capacity, Allocator allocator = {});
+inline string_buf init_string_buf(char* cstr, size_t capacity = 0, Allocator allocator = {})
 {
-    return init_string_buf(cstring(cstr), capacity);
+    return init_string_buf(cstring(cstr), capacity, allocator);
 }
-inline string_buf init_string_buf(size_t capacity = 128)
+inline string_buf init_string_buf(size_t capacity = 128, Allocator allocator = {})
 {
-    return init_string_buf(lstring(""), capacity);
+    return init_string_buf(lstring(""), capacity, allocator);
 }
 
 void StringBuf_RangeRemove(string_buf* buf, int start, int end);

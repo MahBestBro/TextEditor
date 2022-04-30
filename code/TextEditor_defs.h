@@ -26,6 +26,10 @@
 
 #define INTROSPECT(introspectFunctionName)
 
+#define KILOBYTE 1000
+#define MEGABYTE (1000 * KILOBYTE)
+#define GIGABYTE (1000 * MEGABYTE)
+
 #define PIXEL_IN_BYTES 4
 #define FONT_SIZE 13
 
