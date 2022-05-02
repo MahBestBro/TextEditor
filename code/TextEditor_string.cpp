@@ -10,7 +10,7 @@ string cstring(char* cstr)
     return result;
 }
 
-char* string::cstring()
+char* string::cstr()
 {
     char* result = HeapAlloc(char, len + 1);
     memcpy(result, str, len);
@@ -149,10 +149,8 @@ void string_buf::dealloc()
 
 char* string_buf::cstr()
 {
-    char* result = (char*)malloc(len + 1);
-    memcpy(result, str, len);
-    result[len] = 0;
-    return result;
+    str[len] = 0;
+    return str;
 }
 
 string_buf init_string_buf(string s, size_t capacity, Allocator allocator)
@@ -179,7 +177,7 @@ void StringBuf_InsertString(string_buf* buf, string insert, int at)
 {
     int prevLen = buf->len;
     buf->len += insert.len;
-    ResizeDynamicArray(&buf->str, buf->len, 1, &buf->cap);
+    buf->resize();
     
     int destOffset = buf->len - prevLen + at;
     memmove(buf->str + destOffset, buf->str + at, prevLen - at);

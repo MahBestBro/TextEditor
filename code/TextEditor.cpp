@@ -422,7 +422,7 @@ inline string_buf GetMultilineText(TextSectionInfo sectionInfo, bool CRCL = fals
 }
 inline string_buf GetMultilineTextTemp(TextSectionInfo sectionInfo, bool CRCL = false)
 {
-    Allocator tempStringAllocator = {StringArena_Alloc, StringArena_Realloc, StringArena_Free};
+    const Allocator tempStringAllocator = {StringArena_Alloc, StringArena_Realloc, StringArena_Free};
     return __GetMultilineText(sectionInfo, CRCL, tempStringAllocator);
 }
 
@@ -538,7 +538,7 @@ void InsertLineAt(int lineIndex)
     {
         editor.lines[i] = editor.lines[i-1];
     }
-	editor.lines[lineIndex] = init_string_buf(INITIAL_LINE_SIZE);
+	editor.lines[lineIndex] = init_string_buf(LINE_CHUNK_SIZE);
 }
 
 void InsertText(string multilineText, EditorPos insertAt)
@@ -1326,8 +1326,10 @@ internal UserSettings userSettings;
 
 void Init()
 {
+    const Allocator lineMemoryAllocator = {LineMemory_Alloc, LineMemory_Realloc, LineMemory_Free};
+
     for (int i = 0; i < MAX_LINES; ++i)
-        editor.lines[i] = init_string_buf(INITIAL_LINE_SIZE);
+        editor.lines[i] = init_string_buf(LINE_CHUNK_SIZE, lineMemoryAllocator);
     
     editor.fileName = init_string_buf("");
 

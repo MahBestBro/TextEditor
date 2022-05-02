@@ -69,7 +69,7 @@ string ReadEntireFileAsString(string fileName)
 {
     string result = {0};
 
-    char* fileNameCStr = fileName.cstring();
+    char* fileNameCStr = fileName.cstr();
     HANDLE fileHandle = CreateFileA(
         fileNameCStr, 
         GENERIC_READ, 
@@ -186,7 +186,7 @@ bool WriteToFile(string fileName, string text, bool overwrite, int32 writeStart)
 {
     bool result = false;
 
-    char* fileNameCStr = fileName.cstring();
+    char* fileNameCStr = fileName.cstr();
     DWORD creationDisposition = (overwrite) ? OPEN_EXISTING : CREATE_ALWAYS;
     HANDLE fileHandle = CreateFileA(fileNameCStr, GENERIC_WRITE, 0, 0, creationDisposition, 0, 0);
     free(fileNameCStr);
@@ -489,6 +489,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     running = true;
     int64 prevCount = 0;
 
+
+    InitLineMemory();
     Init();
 
     while (running)

@@ -1,4 +1,3 @@
-#include "TextEditor_dynarray.h"
 #include "TextEditor_alloc.h"
 
 #ifndef TEXT_EDITOR_STRING_H
@@ -13,7 +12,7 @@ struct string
 
     char operator[](int index) { return str[index]; }
 
-    char* cstring();
+    char* cstr();
 };
 
 string cstring(char* cstr);

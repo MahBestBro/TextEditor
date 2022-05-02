@@ -31,8 +31,6 @@ PROGRAMMING/REFACTORING:
         - have bindings for strings and chars to colours
     - Have tokeniser only produce tokens for what's on screen 
     - Consider removing editor moving side effects from functions?
-    - Start using custom and local allocators instead of malloc all the time
-        - Have a local allocator for temporary strings that just flushes every frame
     - Have a function that can map a callback function to an input
         - Pass in inputcode and function pointer which'll be mapped to input.
         - Add optional repeat option which adds timed event.

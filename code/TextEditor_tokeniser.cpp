@@ -2,6 +2,7 @@
 #include "TextEditor.h"
 #include "TextEditor_string.h"
 #include "TextEditor_tokeniser.h"
+#include "TextEditor_dynarray.h"
 
 #define INITIAL_TYPEDEFS_SIZE 64
 

@@ -35,7 +35,7 @@
 
 #define MAX_LINES 256
 #define MAX_UNDOS 256
-#define INITIAL_LINE_SIZE 256
+#define LINE_CHUNK_SIZE 128
 
 typedef uint8_t byte;
 typedef uint8_t uchar;
