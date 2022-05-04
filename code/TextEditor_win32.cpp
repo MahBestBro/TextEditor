@@ -490,7 +490,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     int64 prevCount = 0;
 
 
-    InitLineMemory();
     Init();
 
     while (running)

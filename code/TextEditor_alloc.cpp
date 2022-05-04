@@ -1,3 +1,5 @@
+#include "stdlib.h"
+
 #include "TextEditor_defs.h"
 #include "TextEditor_alloc.h"
 
@@ -43,58 +45,89 @@ void FlushStringArena()
     temporaryStringArena.used = 0;
 }
 
-void InitLineMemory()
-{
-    for (int i = 0; i < MAX_LINE_MEMORY; i += LINE_CHUNK_SIZE)
-        *(uint64*)(&lineMemory.memory[i]) = LINE_MEM_UNALLOCATED_CHUNK_SIGN;
-}
-
-//TODO: Maybe cache this in a header?
-int LineMemory_ChunkSize(void* block)
-{
-    int result = 0;
-
-    int startingChunk = (int)(((byte*)block - lineMemory.memory) / 128);
-    Assert(startingChunk % LINE_CHUNK_SIZE == 0);
-    for (int i = startingChunk; i < lineMemory.numTotalChunks; ++i)
-    {
-        int chunk = i * LINE_CHUNK_SIZE;
-        if (*(uint64*)(&lineMemory.memory[chunk]) == LINE_MEM_UNALLOCATED_CHUNK_SIGN)
-            break;
-        result++;
-    }
-
-    return result;
-}
+//void InitLineMemory(uint32 initialNumberOfChunks) //TODO: Maybe this can be uint16?
+//{
+//    for (int i = 0; i < MAX_LINE_MEMORY; i += LINE_CHUNK_SIZE)
+//        *(uint64*)(&lineMemory.memory[i]) = LINE_MEM_UNALLOCATED_CHUNK_SIGN;
+//}
 
 void* LineMemory_Alloc(size_t size)
 {
     Assert(size % LINE_CHUNK_SIZE == 0);
+    Assert(size > 0);
 
-    const int numChunksAllocating = (int)(size / LINE_CHUNK_SIZE);
-    for (int i = 0; i < lineMemory.numTotalChunks; ++i)
+    const uint32 numChunksAllocating = (uint32)(size / LINE_CHUNK_SIZE);
+
+    //If we have not allocated yet, allocate
+    if (lineMemory.numUsedBlocks == 0)
     {
-        bool canAllocate = true;
-        for (int j = 0; j < numChunksAllocating; ++j)
-        {
-            int chunk = (i + j) * LINE_CHUNK_SIZE;
-            if (*(uint64*)(&lineMemory.memory[chunk]) != LINE_MEM_UNALLOCATED_CHUNK_SIGN)
-            {
-                canAllocate = false;
-                break;
-            }
-        }
+        Assert(lineMemory.numUsedChunks == 0);
 
-        if (canAllocate) 
+        byte* result = lineMemory.memory;
+        lineMemory.blockInfos[lineMemory.numUsedBlocks++] = {result, numChunksAllocating};
+        lineMemory.numUsedChunks += numChunksAllocating;
+        return result;
+    }
+
+    //Check if there's room in front
+    if (MAX_LINE_MEM_CHUNKS - lineMemory.numUsedChunks >= numChunksAllocating)
+    {
+        LineMemoryBlockInfo topBlock = lineMemory.blockInfos[lineMemory.numUsedBlocks - 1];
+        byte* result = topBlock.at + topBlock.numChunks * LINE_CHUNK_SIZE;
+        lineMemory.blockInfos[lineMemory.numUsedBlocks++] = {result, numChunksAllocating};
+        lineMemory.numUsedChunks += numChunksAllocating;
+        return result;
+    }
+    
+    //If no room in front, check if there's room in the back
+    const uint32 numBytesAtFront = (uint32)(lineMemory.blockInfos[0].at - lineMemory.memory);
+    if (numBytesAtFront / LINE_CHUNK_SIZE >= numChunksAllocating)
+    {
+        byte* result = lineMemory.memory;
+        memcpy(lineMemory.blockInfos, lineMemory.blockInfos + 1, lineMemory.numUsedBlocks);
+        lineMemory.blockInfos[0] = {result, numChunksAllocating};
+        lineMemory.numUsedChunks += numChunksAllocating;
+        return result;
+    }
+
+    //If no room in front or back, check if there's room in between blocks
+    for (uint32 i = 0; i < lineMemory.numUsedBlocks - 1; ++i)
+    {
+        const LineMemoryBlockInfo currentBlock = lineMemory.blockInfos[i];
+        const LineMemoryBlockInfo nextBlock = lineMemory.blockInfos[i + 1];
+
+        const uint32 byteDiff = (uint32)(nextBlock.at - currentBlock.at);
+        const uint32 freeChunks = byteDiff / LINE_CHUNK_SIZE + currentBlock.numChunks;
+        if (freeChunks >= numChunksAllocating)
         {
-            //TODO: See whether we can actually store this as a smaller int (dk if it will be important tho)
-            *(int*)(&lineMemory.memory[i * LINE_CHUNK_SIZE]) = numChunksAllocating;
-            lineMemory.numChunksUsed += numChunksAllocating;
-            return lineMemory.memory + i * LINE_CHUNK_SIZE;
+            byte* result = currentBlock.at + currentBlock.numChunks * LINE_CHUNK_SIZE;
+            //I don't think we need to do bounds checks here since we already did so?
+            memcpy(lineMemory.blockInfos + i + 2, 
+                   lineMemory.blockInfos + i + 1,
+                   lineMemory.numUsedBlocks - i);
+            lineMemory.blockInfos[i + 1] = {result, numChunksAllocating};
+            lineMemory.numUsedBlocks++;
+            lineMemory.numUsedChunks += numChunksAllocating;
+            return result;
         }
     }
 
+    //no room for such chunk
     return nullptr;
+}
+
+internal int LineMemoryBlockInfo_Compare(const void* a, const void* b)
+{
+    return (int)(((LineMemoryBlockInfo*)a)->at - ((LineMemoryBlockInfo*)b)->at);
+}
+
+internal LineMemoryBlockInfo* LineMemory_GetBlockInfoPtr(void* at)
+{
+    return (LineMemoryBlockInfo*)bsearch(&at, 
+                                         lineMemory.blockInfos,
+                                         lineMemory.numUsedBlocks,
+                                         sizeof(LineMemoryBlockInfo),
+                                         LineMemoryBlockInfo_Compare);
 }
 
 void* LineMemory_Realloc(void* block, size_t size)
@@ -102,7 +135,10 @@ void* LineMemory_Realloc(void* block, size_t size)
     void* result = LineMemory_Alloc(size);
 	if (result)
 	{
-		memcpy(result, block, LineMemory_ChunkSize(block) * LINE_CHUNK_SIZE);
+        LineMemoryBlockInfo* blockInfo = LineMemory_GetBlockInfoPtr(block);
+        Assert(blockInfo);
+
+		memcpy(result, block, blockInfo->numChunks * LINE_CHUNK_SIZE);
 		LineMemory_Free(block);
 	}
     return result;
@@ -110,8 +146,10 @@ void* LineMemory_Realloc(void* block, size_t size)
 
 void LineMemory_Free(void* block)
 {
-    const int blockChunkSize = LineMemory_ChunkSize(block);
-    for (int i = 0; i < blockChunkSize * LINE_CHUNK_SIZE; i += LINE_CHUNK_SIZE)
-        *(uint64*)(&lineMemory.memory[i]) = LINE_MEM_UNALLOCATED_CHUNK_SIGN;
-    lineMemory.numChunksUsed -= blockChunkSize;
+    LineMemoryBlockInfo* blockPtr = LineMemory_GetBlockInfoPtr(block);
+    const int blockIndex = (int)((blockPtr - lineMemory.blockInfos) / LINE_CHUNK_SIZE);
+
+    lineMemory.numUsedChunks -= lineMemory.blockInfos[blockIndex].numChunks;
+    memcpy(blockPtr, blockPtr + 1, lineMemory.numUsedBlocks - blockIndex - 1);
+    lineMemory.numUsedBlocks--;
 }

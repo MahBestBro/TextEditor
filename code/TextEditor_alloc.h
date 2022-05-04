@@ -5,6 +5,7 @@
 
 #define MAX_LINE_MEMORY 2 * MEGABYTE
 #define LINE_MEM_UNALLOCATED_CHUNK_SIGN 0x0404040404040404
+#define MAX_LINE_MEM_CHUNKS MAX_LINE_MEMORY / LINE_CHUNK_SIZE
 
 typedef void* (*alloc_func)(size_t);
 typedef void* (*realloc_func)(void*, size_t);
@@ -24,12 +25,18 @@ struct StringArena
     size_t used;
 };
 
+struct LineMemoryBlockInfo
+{
+    byte* at;
+    uint32 numChunks; //TODO: Maybe this can be uint16?
+};
+
 struct LineMemoryArena
 {
     byte memory[MAX_LINE_MEMORY];
-    size_t numTotalChunks = MAX_LINE_MEMORY / LINE_CHUNK_SIZE;
-    size_t numChunksUsed = 0;
-
+    LineMemoryBlockInfo blockInfos[MAX_LINE_MEM_CHUNKS];
+    uint32 numUsedBlocks = 0;
+    uint32 numUsedChunks = 0;
 };
 
 void* StringArena_Alloc(size_t size);
