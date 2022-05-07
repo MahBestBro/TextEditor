@@ -196,7 +196,7 @@ void StringBuf_RemoveAt(string_buf* buf, int at)
 
 wchar* CStrToWStr(const char* c, int len)
 {
-    wchar* wc = (wchar*)StringArena_Alloc((len + 1) * sizeof(wchar));
+    wchar* wc = (wchar*)Alloc_temporaryStringArena((len + 1) * sizeof(wchar));
     mbstowcs_s(0, wc, len + 1, c, len);
     return wc;
 }

@@ -22,6 +22,10 @@
 #include "TextEditor_tokeniser.h"
 
 #include "TextEditor_alloc.cpp"
+
+DEF_STRING_ARENA_FUNCS(temporaryStringArena);
+DEF_STRING_ARENA_FUNCS(undoStringArena);
+
 #include "TextEditor_input.cpp"
 #include "TextEditor.cpp"
 #include "TextEditor_string.cpp"
@@ -265,7 +269,7 @@ string GetClipboardText()
         if (lptstr != NULL) 
         { 
             result.len = (int)wcslen(lptstr);
-            result.str = (char*)StringArena_Alloc(result.len + 1);
+            result.str = (char*)Alloc_temporaryStringArena(result.len + 1);
             wcstombs_s(0, result.str, result.len + 1, lptstr, result.len);
             //result[len] = 0;
             GlobalUnlock(hglb); 
@@ -301,7 +305,7 @@ string ShowFileDialogAndGetFileName(bool save)
     if (succeeded)
     {
         int len = (int)wcslen(chosenFileName);
-        result.str = (char*)StringArena_Alloc(len + 1);
+        result.str = (char*)Alloc_temporaryStringArena(len + 1);
         wcstombs_s(0, result.str, len + 1, chosenFileName, len);
         result.len = len;
     } 
@@ -534,7 +538,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         win32_UpdateWindow(hdc, /*&windowRect,*/ 0, 0, windowWidth, windowHeight);
         ReleaseDC(hwnd, hdc);
 
-        FlushStringArena();
+        FlushStringArena(&temporaryStringArena);
     }
     return 0;
 }

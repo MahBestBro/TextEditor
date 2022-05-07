@@ -393,7 +393,7 @@ void SetTopChangedLine(int newLineIndex)
         editor.topChangedLineIndex = editor.cursorPos.line;
 }
 
-string_buf __GetMultilineText(TextSectionInfo sectionInfo, bool CRCL = false, Allocator allocator = {})
+string_buf GetMultilineText(TextSectionInfo sectionInfo, Allocator allocator = {}, bool CRCL = false)
 {
     const int numLines = sectionInfo.bottom.line - sectionInfo.top.line + 1;
     
@@ -414,16 +414,6 @@ string_buf __GetMultilineText(TextSectionInfo sectionInfo, bool CRCL = false, Al
     }
 
     return result;
-}
-
-inline string_buf GetMultilineText(TextSectionInfo sectionInfo, bool CRCL = false)
-{
-    return __GetMultilineText(sectionInfo, CRCL);
-}
-inline string_buf GetMultilineTextTemp(TextSectionInfo sectionInfo, bool CRCL = false)
-{
-    const Allocator tempStringAllocator = {StringArena_Alloc, StringArena_Realloc, StringArena_Free};
-    return __GetMultilineText(sectionInfo, CRCL, tempStringAllocator);
 }
 
 void RemoveTextSection(TextSectionInfo sectionInfo)
@@ -498,16 +488,16 @@ void AddToUndoStack(EditorPos undoStart, EditorPos undoEnd, UndoType type, bool 
         TextSectionInfo section = GetTextSectionInfo(undoStart, undoEnd);
 		if (fillBuffer)
 		{
-			undo.text = GetMultilineText(section);
+			undo.text = GetMultilineText(section, allocator_undoStringArena);
 		}
         else
         {
-            undo.text = init_string_buf();
+            undo.text = init_string_buf(128, allocator_undoStringArena);
         }
     }
     else if (type == UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER)
     {
-        undo.text = init_string_buf();
+        undo.text = init_string_buf(); //I don't like this at all
     }
 
     if (redo)
@@ -600,7 +590,7 @@ void SaveFile(string fileName)
     
     EditorPos writeSectionEnd = {editor.lines[editor.numLines - 1].len, editor.numLines - 1};
     TextSectionInfo writeTextSection = GetTextSectionInfo(writeSectionStart, writeSectionEnd);
-    string_buf textToWrite = GetMultilineTextTemp(writeTextSection, true);
+    string_buf textToWrite = GetMultilineText(writeTextSection, allocator_temporaryStringArena, true);
     if(WriteToFile(fileName, textToWrite.toStr(), overwrite, writeStart))
     {
         if (!overwrite) editor.fileName = fileName;
@@ -630,7 +620,7 @@ void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
         case UNDOTYPE_ADDED_TEXT:
         {
             stack[*numInStack - 1].type = UNDOTYPE_REMOVED_TEXT_SECTION;
-            stack[*numInStack - 1].text = GetMultilineText(sectionInfo);
+            stack[*numInStack - 1].text = GetMultilineText(sectionInfo, allocator_undoStringArena);
             RemoveTextSection(sectionInfo);
         } break;
 
@@ -639,6 +629,7 @@ void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
             stack[*numInStack - 1].type = UNDOTYPE_ADDED_TEXT;
 
             InsertText(undoInfo.text.toStr(), sectionInfo.top);
+            undoInfo.text.dealloc();
             
             if (!isRedo && undoInfo.wasHighlight)
             {
@@ -856,7 +847,7 @@ void AddChar()
         TextSectionInfo highlightInfo = 
             GetTextSectionInfo(editor.highlightStart, editor.cursorPos);
         editor.undoStack[editor.numUndos - 1].type = UNDOTYPE_OVERWRITE;
-        editor.undoStack[editor.numUndos - 1].text = GetMultilineText(highlightInfo);
+        editor.undoStack[editor.numUndos - 1].text = GetMultilineText(highlightInfo, allocator_undoStringArena);
         
 		RemoveTextSection(highlightInfo);
         editor.undoStack[editor.numUndos - 1].start = editor.cursorPos;
@@ -975,7 +966,7 @@ void Backspace()
         AddToUndoStack(editor.highlightStart, editor.cursorPos, UNDOTYPE_REMOVED_TEXT_SECTION);
         editor.undoStack[editor.numUndos - 1].wasHighlight = true;
         TextSectionInfo highlightInfo = GetTextSectionInfo(editor.highlightStart, editor.cursorPos);
-        editor.undoStack[editor.numUndos - 1].text = GetMultilineText(highlightInfo);
+        editor.undoStack[editor.numUndos - 1].text = GetMultilineText(highlightInfo, allocator_undoStringArena);
         ResetUndoStack(true);
         
         RemoveTextSection(highlightInfo);
@@ -1072,7 +1063,7 @@ void Enter()
         TextSectionInfo highlightInfo = GetTextSectionInfo(editor.highlightStart, 
                                                             editor.cursorPos);
         editor.undoStack[editor.numUndos - 1].type = UNDOTYPE_OVERWRITE;
-        editor.undoStack[editor.numUndos - 1].text = GetMultilineText(highlightInfo);
+        editor.undoStack[editor.numUndos - 1].text = GetMultilineText(highlightInfo, allocator_undoStringArena);
         //editor.undoStack[editor.numUndos - 1].numLines = 
         //    highlightInfo.bottom.line - highlightInfo.top.line;
 
@@ -1180,9 +1171,8 @@ void CopyHighlightedText()
 
     TextSectionInfo highlightInfo = GetTextSectionInfo(editor.highlightStart, 
                                                        editor.cursorPos);
-    string_buf copiedText = GetMultilineTextTemp(highlightInfo, true);
+    string_buf copiedText = GetMultilineText(highlightInfo, allocator_temporaryStringArena, true);
     CopyToClipboard(copiedText.toStr());
-    //copiedText.dealloc();
 }
 
 void Paste()
@@ -1202,7 +1192,7 @@ void Paste()
 
 			editor.undoStack[editor.numUndos - 1].start = highlightInfo.top;
             editor.undoStack[editor.numUndos - 1].type = UNDOTYPE_OVERWRITE;
-            editor.undoStack[editor.numUndos - 1].text = GetMultilineText(highlightInfo);
+            editor.undoStack[editor.numUndos - 1].text = GetMultilineText(highlightInfo, allocator_undoStringArena);
             
             RemoveTextSection(highlightInfo);
             ClearHighlights();
@@ -1223,7 +1213,7 @@ void CutHighlightedText()
     
     AddToUndoStack(editor.highlightStart, editor.cursorPos, UNDOTYPE_REMOVED_TEXT_SECTION);
     TextSectionInfo highlightInfo = GetTextSectionInfo(editor.highlightStart, editor.cursorPos);
-    editor.undoStack[editor.numUndos - 1].text = GetMultilineText(highlightInfo);
+    editor.undoStack[editor.numUndos - 1].text = GetMultilineText(highlightInfo, allocator_undoStringArena);
     ResetUndoStack(true);
 
     RemoveTextSection(GetTextSectionInfo(editor.highlightStart, editor.cursorPos));
@@ -1785,4 +1775,5 @@ void Draw(float dt)
                            cursorDrawPos.y, cursorDrawPos.y + CURSOR_HEIGHT};
         DrawRect(cursorDims, userSettings.cursorColour);
     }
+    
 }

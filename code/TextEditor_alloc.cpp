@@ -3,53 +3,62 @@
 #include "TextEditor_defs.h"
 #include "TextEditor_alloc.h"
 
-internal byte temp_string_memory[1 * MEGABYTE];
-StringArena temporaryStringArena = {temp_string_memory, sizeof(temp_string_memory), 0};
+StringArena temporaryStringArena;
+StringArena undoStringArena;
 
 internal LineMemoryArena lineMemory;
 
-
-internal inline size_t StringArena_BlockSize(void* block)
+internal inline byte* StringArena_PrevBlock(void* block)
 {
-    return *((size_t*)block - 1);
+    return *((byte**)block - 1);
 }
 
-void* StringArena_Alloc(size_t size)
+void* StringArena_Alloc(StringArena* arena, size_t size)
 {
-    Assert(temporaryStringArena.used + size + sizeof(size_t) <= temporaryStringArena.size);
+    Assert(arena->used + size + sizeof(byte*) <= MAX_STRING_ARENA_MEMORY);
 
-    void* result = temporaryStringArena.top;
-    *(size_t*)result = size; 
-    result = (size_t*)result + 1;
-    temporaryStringArena.top += size + sizeof(size_t);
-    temporaryStringArena.used += size + sizeof(size_t);
+    void* result = arena->top;
+    arena->top += size;
+    *(byte**)arena->top = (byte*)result;
+    arena->top += sizeof(byte*);
+
+    arena->used += size + sizeof(byte*);
+    
     return result;
 }
 
-void* StringArena_Realloc(void* block, size_t size)
+void* StringArena_Realloc(StringArena* arena, void* block, size_t size)
 {
-    void* result = StringArena_Alloc(size);
-    memcpy(result, block, StringArena_BlockSize(block));
+    Assert(block >= arena->memory && block <= arena->memory + MAX_STRING_ARENA_MEMORY);
+
+    void* result = StringArena_Alloc(arena, size);
+    memcpy(result, block, size);
     return result;
 }
 
-void StringArena_Free(void* block)
+void StringArena_Free(StringArena* arena, void* block)
 {
-    UNIMPLEMENTED("TODO: Avoid having to code this cause like this is useless from what I can tell");
-    return;
+    Assert(block >= arena->memory && block <= arena->memory + MAX_STRING_ARENA_MEMORY);
+
+    if (block > arena->top) return;
+
+	if (block == arena->memory)
+	{
+		FlushStringArena(arena);
+		return;
+	}
+
+    arena->used -= (size_t)(arena->top - StringArena_PrevBlock(block));
+    arena->top = StringArena_PrevBlock(block);
 }
 
-void FlushStringArena()
+void FlushStringArena(StringArena* arena)
 {
-    temporaryStringArena.top = temp_string_memory;
-    temporaryStringArena.used = 0;
+    arena->top = arena->memory;
+    arena->used = 0;
 }
 
-//void InitLineMemory(uint32 initialNumberOfChunks) //TODO: Maybe this can be uint16?
-//{
-//    for (int i = 0; i < MAX_LINE_MEMORY; i += LINE_CHUNK_SIZE)
-//        *(uint64*)(&lineMemory.memory[i]) = LINE_MEM_UNALLOCATED_CHUNK_SIGN;
-//}
+
 
 void* LineMemory_Alloc(size_t size)
 {
