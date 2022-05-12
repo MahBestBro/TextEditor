@@ -31,7 +31,7 @@
 #define GIGABYTE (1000 * MEGABYTE)
 
 #define PIXEL_IN_BYTES 4
-#define FONT_SIZE 13
+#define INTITIAL_FONT_SIZE 18
 
 #define MAX_LINES 256
 #define MAX_UNDOS 256

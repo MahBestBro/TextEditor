@@ -8,15 +8,14 @@
 
 #include "stdio.h"
 
-#include <ft2build.h>
-#include FT_FREETYPE_H 
-
+#include "stb_truetype.h"
 
 #include "TextEditor_defs.h"
 #include "TextEditor_alloc.h"
-#include "TextEditor_input.h"
-#include "TextEditor.h"
 #include "TextEditor_string.h"
+#include "TextEditor_input.h"
+#include "TextEditor_font.h"
+#include "TextEditor.h"
 #include "TextEditor_meta.h"
 #include "TextEditor_config.h"
 #include "TextEditor_tokeniser.h"
@@ -26,21 +25,20 @@
 DEF_STRING_ARENA_FUNCS(temporaryStringArena);
 DEF_STRING_ARENA_FUNCS(undoStringArena);
 
+global_variable Input input = {};
+global_variable ScreenBuffer screenBuffer;
+
 #include "TextEditor_input.cpp"
 #include "TextEditor.cpp"
 #include "TextEditor_string.cpp"
+#include "TextEditor_font.cpp"
 #include "TextEditor_meta.cpp"
 #include "TextEditor_config.cpp"
 #include "TextEditor_tokeniser.cpp"
 
 
-
-Input input = {};
-FontChar fontChars[128];
-ScreenBuffer screenBuffer;
-
-global_variable BITMAPINFO bitmapInfo;
-global_variable bool running;
+internal BITMAPINFO bitmapInfo;
+internal bool running;
 
 inline uint32 SafeTruncateSize32(uint64 val)
 {
@@ -146,6 +144,66 @@ char* ReadEntireFileAsCstr(char* fileNameCStr, uint32* fileLen)
         {
             uint32 fileSize32 = SafeTruncateSize32(fileSize.QuadPart);
             result = (char*)VirtualAlloc(0, fileSize32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+            if (result)
+            {
+                DWORD bytesRead;
+                if(ReadFile(fileHandle, result, fileSize32, &bytesRead, 0) && 
+                   fileSize32 == bytesRead)
+                {
+                    //File read Successfully!
+                    if (fileLen)
+                    {
+                        *fileLen = fileSize32;
+                        Assert(result[*fileLen] == 0); //I do not know whether ReadFile null terminates, if you hit this, this means the issue is solved and it doesn't null terminate
+                    }   
+                }
+                else
+                {
+                    VirtualFree(result, 0, MEM_RELEASE);
+                    result = nullptr;
+                }
+            }
+            else
+            {
+                //Log
+            }
+        }
+        else
+        {
+            //Log
+        }
+        CloseHandle(fileHandle);
+    }
+    else
+    {
+        //Log
+        win32_LogError();
+        
+    }
+
+    return result;
+}
+
+uchar* ReadEntireFileUChar(char* fileNameCStr, uint32* fileLen)
+{
+    uchar* result = nullptr;
+
+    HANDLE fileHandle = CreateFileA(
+        fileNameCStr, 
+        GENERIC_READ, 
+        FILE_SHARE_READ, 
+        0, 
+        OPEN_EXISTING, 
+        0, 0
+    );
+
+    if (fileHandle != INVALID_HANDLE_VALUE)
+    {
+        LARGE_INTEGER fileSize;
+        if (GetFileSizeEx(fileHandle, &fileSize))
+        {
+            uint32 fileSize32 = SafeTruncateSize32(fileSize.QuadPart);
+            result = (uchar*)VirtualAlloc(0, fileSize32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
             if (result)
             {
                 DWORD bytesRead;
@@ -454,39 +512,29 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         return 0;
     }
 
-    //Init font stuff
-    FT_Library ft;
-    if (FT_Init_FreeType(&ft))
-    {
-        OutputDebugString(L"ERROR::FREETYPE: Could not init FreeType Library\n");
-        return -1;
-    }
-    FT_Face face;
-    if (FT_New_Face(ft, "fonts/consolab.ttf", 0, &face))
-    {
-        OutputDebugString(L"ERROR::FREETYPE: Failed to load font\n");  
-        return -1;
-    }
-    FT_Set_Pixel_Sizes(face, 0, FONT_SIZE);  
+    stbtt_fontinfo fontInfo;
+    uchar* ttfFile = ReadEntireFileUChar("fonts/consola.ttf");
+    stbtt_InitFont(&fontInfo, ttfFile, stbtt_GetFontOffsetForIndex(ttfFile, 0));
+
+    int offsetAboveBaseline, offsetBelowBaseline, lineGap;
+    stbtt_GetFontVMetrics(&fontInfo, &offsetAboveBaseline, &offsetBelowBaseline, &lineGap);
+    float scale = stbtt_ScaleForPixelHeight(&fontInfo, (float)fontSizes[fontData.sizeIndex]);
 
     for (uchar c = 0; c < 128; ++c)
     {
         FontChar fc;
-        if (FT_Load_Char(face, c, FT_LOAD_RENDER))
-        {
-            OutputDebugString(L"ERROR::FREETYTPE: Failed to load Glyph\n");
-            continue;
-        }
+        
+        int width, height, xOffset, yOffset, advance, lsb;
+        fc.pixels = stbtt_GetCodepointBitmap(&fontInfo, 0, scale, c, &width, &height, &xOffset, &yOffset);
+        stbtt_GetCodepointHMetrics(&fontInfo, c, &advance, &lsb);
 
-        fc.width = face->glyph->bitmap.width;
-        fc.height = face->glyph->bitmap.rows;
-        fc.left = face->glyph->bitmap_left;
-        fc.top = face->glyph->bitmap_top;
-        fc.advance = face->glyph->advance.x / 64;
-        fc.pixels = malloc(fc.width * fc.height); //Each byte refers to 1 pixel (8bpp)
-        memcpy(fc.pixels, face->glyph->bitmap.buffer, fc.width * fc.height);
-        fontChars[c] = fc;
-    }
+        fc.width = width;
+        fc.height = height;
+        fc.left = xOffset;
+        fc.top = yOffset;
+        fc.advance = (uint32)RoundToInt(advance * scale);
+        fontData.chars[c] = fc;
+    }    
 
     ShowWindow(hwnd, nCmdShow);
 

@@ -1,6 +1,7 @@
 #include "TextEditor_defs.h"
 #include "TextEditor.h"
 #include "TextEditor_string.h"
+#include "TextEditor_font.h"
 #include "TextEditor_meta.h"
 #include "TextEditor_config.h"
 

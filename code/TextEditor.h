@@ -14,12 +14,9 @@ struct ScreenBuffer
     int width, height;
 };
 
-struct FontChar
+struct Rect
 {
-    uint32 width, height; // Size of glyph
-    uint32 left, top;     // Offset from baseline to left/top of glyph
-    uint32 advance;       // Offset to advance to next glyph
-    void* pixels;
+    int left, right, bottom, top;
 };
 
 struct Colour
@@ -118,9 +115,16 @@ inline void* dbg_malloc(size_t size, const char* file, int line)
     return malloc(size);
 }
 
+inline int RoundToInt(float x)
+{
+    float frac = x - (int)x;
+    return (int)x + (frac >= 0.5f);
+}
+
 void FreeWin32(void* memory);
 
 char* ReadEntireFileAsCstr(char* fileName, uint32* fileLen = nullptr);
+uchar* ReadEntireFileUChar(char* fileName, uint32* fileLen = nullptr);
 string ReadEntireFileAsString(string fileName);
 bool WriteToFile(string fileName, string text, bool overwrite, int32 writeStart = 0);
 

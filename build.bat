@@ -2,7 +2,7 @@
 
 set commonCompilerFlags= -nologo -MDd -Gm- -GR- -EHa- -Od -Oi -WX -W4 -wd4201 -wd4100 -FC -Z7 
 set commonLinkerFlags= -incremental:no -opt:ref  
-set libraries= user32.lib gdi32.lib shell32.lib Comdlg32.lib freetyped.lib
+set libraries= user32.lib gdi32.lib shell32.lib Comdlg32.lib
 set includeDirs= includes
 
 rem -GR- and -EHa- turn off exception handling stuff
