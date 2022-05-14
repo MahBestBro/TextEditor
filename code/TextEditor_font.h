@@ -14,11 +14,16 @@ struct FontChar
 struct Font
 {
     FontChar chars[128];
-    int sizeIndex = 7;
+    int sizeIndex = 4;
 };
 
 global_variable const uint32 fontSizes[] = {8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72};
 global_variable Font fontData;
+
+inline int PointsToPix(int points)
+{
+    return 4 * points / 3;
+}
 
 void ResizeFont(int fontSizeIndex);
 void ChangeFont(string ttfFileName);

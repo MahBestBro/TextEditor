@@ -356,7 +356,7 @@ string ShowFileDialogAndGetFileName(bool save)
     ofn.lpstrFileTitle = NULL;
     ofn.nMaxFileTitle = 0;
     ofn.lpstrInitialDir = NULL;
-    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR | OFN_OVERWRITEPROMPT;
 
     // Display the Open dialog box. 
     BOOL succeeded = (save) ? GetSaveFileName(&ofn) : GetOpenFileName(&ofn);
@@ -518,7 +518,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     int offsetAboveBaseline, offsetBelowBaseline, lineGap;
     stbtt_GetFontVMetrics(&fontInfo, &offsetAboveBaseline, &offsetBelowBaseline, &lineGap);
-    float scale = stbtt_ScaleForPixelHeight(&fontInfo, (float)fontSizes[fontData.sizeIndex]);
+    float scale = stbtt_ScaleForPixelHeight(&fontInfo, 
+                                            (float)PointsToPix(fontSizes[fontData.sizeIndex]));
 
     for (uchar c = 0; c < 128; ++c)
     {

@@ -22,18 +22,59 @@ internal int numTypedefs = 0;
 internal LineView poundDefines[INITIAL_TYPEDEFS_SIZE];
 internal int numPoundDefines = 0;
 
+const string integerSuffixes[] = 
+{
+    lstring("u"), 
+    lstring("l"),  
+
+    lstring("ul"), lstring("lu"),
+    lstring("Ul"), lstring("lU"), 
+    lstring("uL"), lstring("Lu"), 
+    lstring("UL"), lstring("LU"),
+
+    lstring("ull"), lstring("llu"),
+    lstring("uLL"), lstring("LLu"),
+    lstring("Ull"), lstring("llU"),
+    lstring("ULL"), lstring("LLU")
+};
+
 //TODO: also include suffixes
 bool IsNumber(string str)
 {
+    string suffix = str;
     //Checking for binary and hexadecimal numbers
-	bool isHexOrBinary = str.len >= 3 && CharInString(str[1], lstring("xXbB"));
-    
-    for (int i = 2 * (isHexOrBinary); i < str.len; ++i)
+	if (str.len >= 3 && CharInString(str[1], lstring("xXbB")))
     {
-        if (!IsNumeric(str[i]))
-            return false;
+        if (str[0] != '0') return false;
+
+        suffix.str += 2;
+        suffix.len -= 2;
     }
-    return true;
+    
+    //Get suffix of number
+    bool encounteredDecimalPoint = false;
+    while(suffix.len > 0 && (IsNumeric(suffix[0]) || suffix[0] == '.'))
+    {
+        if (suffix[0] == '.') 
+        {
+            if (encounteredDecimalPoint) return false;
+            encounteredDecimalPoint = true;
+        }
+        suffix.str++;
+        suffix.len--;
+    }
+
+    //Check all the suffix cases
+    if (suffix.len == 0) return true;
+    if (encounteredDecimalPoint) return suffix == "f" || suffix == "l";
+        
+    for (int i = 0; i < StackArrayLen(integerSuffixes); ++i)
+    {
+        if (suffix == integerSuffixes[i]) return true;
+    }
+    return false;
+
+    
 }
 
 bool IsBool(string str)
@@ -367,15 +408,15 @@ Token GetTokenFromLine(string_buf code, int lineIndex, int* lineAt, MultilineSta
         {
             token.type = TOKEN_UNKNOWN;
 
-            int start = at;
-            while (at < code.len && (IsAlphaNumeric(code[at]) || code[at] == '_'))
-            {
-                ++at;
-            }
-            token.text.len += at - start;
-
             if (IsAlphabetical(c))
             {
+                int start = at;
+                while (at < code.len && (IsAlphaNumeric(code[at]) || code[at] == '_'))
+                {
+                    ++at;
+                }
+                token.text.len += at - start;
+
                 token.type = TOKEN_IDENTIFIER;
                 if (IsInStringArray(token.text, keywords, StackArrayLen(keywords)))
                 {
@@ -422,9 +463,16 @@ Token GetTokenFromLine(string_buf code, int lineIndex, int* lineAt, MultilineSta
                 } 
                 
             }
-            else if (IsNumber(token.text))
+            else if (IsNumeric(c))
             { 
-                token.type = TOKEN_NUMBER;
+                int start = at;
+                while (at < code.len && (IsAlphaNumeric(code[at]) || code[at] == '.'))
+                {
+                    ++at;
+                }
+                token.text.len += at - start;
+
+                if (IsNumber(token.text)) token.type = TOKEN_NUMBER;
             }
         } break;
         

@@ -13,7 +13,8 @@ void ResizeFont(int fontSizeIndex)
 
     int offsetAboveBaseline, offsetBelowBaseline, lineGap;
     stbtt_GetFontVMetrics(&fontInfo, &offsetAboveBaseline, &offsetBelowBaseline, &lineGap);
-    float scale = stbtt_ScaleForPixelHeight(&fontInfo, (float)fontSizes[fontSizeIndex]);
+    float scale = stbtt_ScaleForPixelHeight(&fontInfo, 
+                                            (float)PointsToPix(fontSizes[fontData.sizeIndex]));
 
     for (uchar c = 0; c < 128; ++c)
     {
