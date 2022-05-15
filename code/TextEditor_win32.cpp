@@ -513,13 +513,17 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     }
 
     stbtt_fontinfo fontInfo;
-    uchar* ttfFile = ReadEntireFileUChar("fonts/consola.ttf");
+    uchar* ttfFile = ReadEntireFileUChar("fonts/consolab.ttf");
     stbtt_InitFont(&fontInfo, ttfFile, stbtt_GetFontOffsetForIndex(ttfFile, 0));
 
     int offsetAboveBaseline, offsetBelowBaseline, lineGap;
     stbtt_GetFontVMetrics(&fontInfo, &offsetAboveBaseline, &offsetBelowBaseline, &lineGap);
     float scale = stbtt_ScaleForPixelHeight(&fontInfo, 
                                             (float)PointsToPix(fontSizes[fontData.sizeIndex]));
+
+    fontData.maxHeight = (uint32)RoundToInt((offsetAboveBaseline - offsetBelowBaseline) * scale);
+    fontData.lineGap = (uint32)RoundToInt(lineGap * scale);
+    fontData.offsetBelowBaseline = (uint32)RoundToInt(-offsetBelowBaseline * scale);
 
     for (uchar c = 0; c < 128; ++c)
     {
@@ -536,6 +540,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         fc.advance = (uint32)RoundToInt(advance * scale);
         fontData.chars[c] = fc;
     }    
+
+    FreeWin32(ttfFile);
 
     ShowWindow(hwnd, nCmdShow);
 

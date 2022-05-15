@@ -1588,12 +1588,12 @@ void Draw(float dt)
     DrawRect(screenDims, userSettings.backgroundColour);
     
     //Get correct position for cursor
-    const IntPair start = {TEXT_X_OFFSET, screenBuffer.height - (int)fontSizes[fontData.sizeIndex]}; 
+    const IntPair start = {TEXT_X_OFFSET, screenBuffer.height - (int)fontData.maxHeight}; 
     IntPair cursorDrawPos = start;
     for (int i = 0; i < editor.cursorPos.textAt; ++i)
         cursorDrawPos.x += fontData.chars[editor.lines[editor.cursorPos.line][i]].advance;
-    cursorDrawPos.y -= editor.cursorPos.line * (int)fontSizes[fontData.sizeIndex];
-    cursorDrawPos.y -= PIXELS_UNDER_BASELINE; 
+    cursorDrawPos.y -= editor.cursorPos.line * (int)(fontData.maxHeight + fontData.lineGap);
+    cursorDrawPos.y -= fontData.offsetBelowBaseline; 
 
     //All this shit here seems very dodgy, maybe refactor or just find a better method
     int xRightLimit = screenBuffer.width - 10;
@@ -1636,16 +1636,14 @@ void Draw(float dt)
         {
             Token token = tokenInfo.tokens[t];
 
-            //if (!token.text.str) continue;
-
 			bool prevTokenOnSameLine = t > 0 && tokenInfo.tokens[t - 1].at.line == token.at.line;
 			bool nextTokenOnSameLine = t < tokenInfo.numTokens - 1 && 
                                        tokenInfo.tokens[t + 1].at.line == token.at.line;
 
-            //Draw text
             if (t == 0 || !prevTokenOnSameLine)
                 x = start.x - editor.textOffset.x;
-            int y = start.y - token.at.line * (int)fontSizes[fontData.sizeIndex] + editor.textOffset.y;
+            int y = start.y - token.at.line * (int)(fontData.maxHeight + fontData.lineGap) 
+                    + editor.textOffset.y;
 
             //Draw whitespace at front of line
 			if (!prevTokenOnSameLine)
@@ -1692,7 +1690,7 @@ void Draw(float dt)
         {
             //Draw text
             int x = start.x - editor.textOffset.x;
-            int y = start.y - i * (int)fontSizes[fontData.sizeIndex] + editor.textOffset.y;
+            int y = start.y - i * (int)(fontData.maxHeight + fontData.lineGap) + editor.textOffset.y;
             DrawText(editor.lines[i].toStr(), x, y, userSettings.defaultTextColour, textBounds);
 
             //Draw Line num
@@ -1778,9 +1776,9 @@ void Draw(float dt)
     {
         if (cursorMoving) cursorBlink.elapsedTime = 0.0f;
         //Draw Cursor
-        const int CURSOR_WIDTH = 2;
-        Rect cursorDims = {cursorDrawPos.x, cursorDrawPos.x + CURSOR_WIDTH, 
-                           cursorDrawPos.y, cursorDrawPos.y + (int)fontSizes[fontData.sizeIndex]};
+
+        Rect cursorDims = {cursorDrawPos.x, cursorDrawPos.x + 2, //TODO: Make width scale with font size
+                           cursorDrawPos.y, cursorDrawPos.y + (int)(fontData.maxHeight + fontData.lineGap)};
         DrawRect(cursorDims, userSettings.cursorColour);
     }
     
