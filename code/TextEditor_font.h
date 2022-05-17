@@ -14,7 +14,7 @@ struct FontChar
 struct Font
 {
     FontChar chars[128];
-    int sizeIndex = 4;
+    int sizeIndex = 3;
     uint32 maxHeight;
     uint32 lineGap;
     uint32 offsetBelowBaseline;

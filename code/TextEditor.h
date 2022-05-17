@@ -8,6 +8,8 @@
 #ifndef TEXT_EDITOR_H
 #define TEXT_EDITOR_H
 
+typedef void (*KeyCallback)(void);
+
 struct ScreenBuffer
 {
     void* memory;

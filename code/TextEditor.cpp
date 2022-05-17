@@ -11,6 +11,8 @@
 #define PIXELS_UNDER_BASELINE 5
 #define LINE_NUM_OFFSET ((fontData.chars[' '].advance) * 4)
 
+const Allocator lineMemoryAllocator = {LineMemory_Alloc, LineMemory_Realloc, LineMemory_Free};
+
 //extern StringArena temporaryStringArena;
 //extern Input input;
 //extern Font font;
@@ -42,37 +44,43 @@ void HandleTimedEvent(TimedEvent* timedEvent, float dt, TimedEvent* nestedEvent)
 }
 
 //Can only think that these are the only 3 needed. Chnge this in the future?
-enum InitialHeldKeys
+enum CommandKeys
 {
+    NONE  = 0b000,
     CTRL  = 0b001,
     ALT   = 0b010,
     SHIFT = 0b100
 };
 
-struct KeyCommand
+CommandKeys operator|(CommandKeys a, CommandKeys b)
 {
-    //initialHeldKeys: Bit flags that correspond to the initial keys to be held
-    byte initialHeldKeys;  
-    InputCode commandKey;
+    return (CommandKeys)((byte)a | (byte)b);
+}
+
+struct KeyBinding
+{
+    CommandKeys commandKeys; //Keys like ctrl, shift and alt which are usually held before actual key
+    InputCode mainKey;
+    KeyCallback callback;
 };
 
-bool KeyCommandDown(KeyCommand keyCommand)
+bool KeyCommandDown(KeyBinding keyBinding)
 {
 	if (InputDown(input.letterKeys['L' - 'A']))
 	{
 		Assert(true);
 	}
 
-    Assert(keyCommand.initialHeldKeys);
+    Assert(keyBinding.commandKeys);
 
-    bool commandKeyDown = InputDown(input.flags[keyCommand.commandKey]);
+    bool mainKeyDown = InputDown(input.flags[keyBinding.mainKey]);
     
-    byte heldInitialKeys = 0b000;
-    heldInitialKeys |= (byte)InputHeld(input.leftCtrl);
-    heldInitialKeys |= (byte)InputHeld(input.leftAlt) << 1;
-    heldInitialKeys |= (byte)InputHeld(input.leftShift) << 2;
+    byte heldCommandKeys = 0b000;
+    heldCommandKeys |= (byte)InputHeld(input.leftCtrl);
+    heldCommandKeys |= (byte)InputHeld(input.leftAlt) << 1;
+    heldCommandKeys |= (byte)InputHeld(input.leftShift) << 2;
     
-    return commandKeyDown && (heldInitialKeys == keyCommand.initialHeldKeys);
+    return mainKeyDown && (heldCommandKeys == keyBinding.commandKeys);
 }
 
 int TextPixelLength(char* text, int len)
@@ -184,11 +192,12 @@ void Draw8bppPixels(Rect rect, uint8* pixels, int stride, Colour colour, Rect li
     Assert(rect.left <= rect.right);
     Assert(rect.bottom <= rect.top);
 
-    if (!limits.right) limits.right = screenBuffer.width;
-    if (!limits.top) limits.top = screenBuffer.height;
+    //TODO: There shouldn't be -1s at the end of these things, fix
+    if (!limits.right) limits.right = screenBuffer.width - 1;
+    if (!limits.top) limits.top = screenBuffer.height - 1;
 
     int pixelColStart = -min(0, rect.left - limits.left);
-    int pixelRowStart = -min(0, limits.top  - rect.top);
+    int pixelRowStart = -min(0, limits.top - rect.top);
 
     rect.left   = Clamp(rect.left,   limits.left,   limits.right);
     rect.right  = Clamp(rect.right,  limits.left,   limits.right);
@@ -520,7 +529,7 @@ void InsertLineAt(int lineIndex)
     {
         editor.lines[i] = editor.lines[i-1];
     }
-	editor.lines[lineIndex] = init_string_buf(LINE_CHUNK_SIZE);
+	editor.lines[lineIndex] = init_string_buf(LINE_CHUNK_SIZE, lineMemoryAllocator);
 }
 
 void InsertText(string multilineText, EditorPos insertAt)
@@ -745,7 +754,7 @@ void HandleUndoInfo(UndoInfo undoInfo, bool isRedo)
 EditorPos GetEditorPosAtMouse()
 {
     EditorPos result;
-    int mouseLine = (screenBuffer.height - input.mousePixelPos.y) / fontSizes[fontData.sizeIndex];
+    int mouseLine = (screenBuffer.height - input.mousePixelPos.y) / (fontData.maxHeight + fontData.lineGap);
     result.line = min(mouseLine, editor.numLines - 1);
     
     int linePixLen = TEXT_X_OFFSET;
@@ -1152,7 +1161,7 @@ void RemoveCurrentLine()
     Tokenise(&tokenInfo);
 }
 
-//TODO: Double check if this is susceptable to overflow attacks and Unix Compatability
+
 void CopyHighlightedText()
 {
     if (editor.highlightStart.textAt == -1) 
@@ -1318,10 +1327,36 @@ internal bool nonCharKeyPressed = false;
 
 internal UserSettings userSettings;
 
+//TODO: Generalise all this stuff into a single struct,would be simpler imo
+KeyBinding nonCharKeyBindings[] =
+{
+    {NONE, INPUTCODE_ENTER, Enter},
+    {NONE, INPUTCODE_BACKSPACE, Backspace},
+    {NONE, INPUTCODE_RIGHT, MoveCursorForward},
+    {NONE, INPUTCODE_LEFT, MoveCursorBackward},
+    {NONE, INPUTCODE_UP, MoveCursorUp},
+    {NONE, INPUTCODE_DOWN, MoveCursorDown}
+};
+
+KeyBinding commandBindings[] = 
+{
+    {CTRL, INPUTCODE_A, HighlightEntireFile},
+    {CTRL, INPUTCODE_C, CopyHighlightedText},
+    {CTRL, INPUTCODE_L, HighlightCurrentLine},
+    {CTRL | SHIFT, INPUTCODE_L, RemoveCurrentLine},
+    {CTRL, INPUTCODE_O, OpenFile},
+    {CTRL, INPUTCODE_S, Save},
+    {CTRL | SHIFT, INPUTCODE_S, SaveAs},
+    {CTRL, INPUTCODE_V, Paste},
+    {CTRL, INPUTCODE_X, CutHighlightedText},
+    {CTRL, INPUTCODE_Y, Redo},
+    {CTRL, INPUTCODE_Z, Undo},
+    {CTRL, INPUTCODE_MINUS, ZoomOut},
+    {CTRL, INPUTCODE_EQUALS, ZoomIn}
+};
+
 void Init()
 {
-    const Allocator lineMemoryAllocator = {LineMemory_Alloc, LineMemory_Realloc, LineMemory_Free};
-
     for (int i = 0; i < MAX_LINES; ++i)
         editor.lines[i] = init_string_buf(LINE_CHUNK_SIZE, lineMemoryAllocator);
     
@@ -1407,34 +1442,13 @@ void Draw(float dt)
     {
         holdChar.elapsedTime = 0.0f;
 
-        //TODO: Move these arrays out of loop at some point
-        byte inputFlags[] = 
-        {
-            input.enter,
-            input.backspace,
-            input.right,
-            input.left,
-            input.up,
-            input.down
-        };
-
-        void (*inputCallbacks[])(void) = 
-        {
-            Enter, 
-            Backspace, 
-            MoveCursorForward, 
-            MoveCursorBackward, 
-            MoveCursorUp, 
-            MoveCursorDown
-        };
-
         bool inputHeld = false;
-        for (int i = 0; i < StackArrayLen(inputFlags); ++i)
+        for (int i = 0; i < StackArrayLen(nonCharKeyBindings); ++i)
         {
-            if (InputDown(inputFlags[i]))
+            if (InputDown(input.flags[nonCharKeyBindings[i].mainKey]))
             {
-                repeatAction.OnTrigger = inputCallbacks[i];
-                inputCallbacks[i]();
+                repeatAction.OnTrigger = nonCharKeyBindings[i].callback;
+                nonCharKeyBindings[i].callback();
                 holdAction.elapsedTime = 0.0f;
 
                 //NOTE: This i < 2 check may get bad in the future
@@ -1443,7 +1457,7 @@ void Draw(float dt)
                     ClearHighlights();
                 }
             }
-            else if (InputHeld(inputFlags[i]))
+            else if (InputHeld(input.flags[nonCharKeyBindings[i].mainKey]))
             {
                 inputHeld = true;
             }
@@ -1524,46 +1538,11 @@ void Draw(float dt)
 
         if (!inputHeld)
         {
-            //TODO: Move these arrays out of loop at some point
-            KeyCommand keyCommands[] =
+            for (int i = 0; i < StackArrayLen(commandBindings); ++i)
             {
-                {CTRL, INPUTCODE_A},
-                {CTRL, INPUTCODE_C},
-                {CTRL, INPUTCODE_L},
-                {CTRL | SHIFT, INPUTCODE_L},
-                {CTRL, INPUTCODE_O},
-                {CTRL, INPUTCODE_S},
-                {CTRL | SHIFT, INPUTCODE_S},
-                {CTRL, INPUTCODE_V},
-                {CTRL, INPUTCODE_X},
-                {CTRL, INPUTCODE_Y},
-                {CTRL, INPUTCODE_Z},
-                {CTRL, INPUTCODE_MINUS},
-                {CTRL, INPUTCODE_EQUALS},
-            };
-
-            void (*keyCommandCallbacks[])(void) = 
-            {
-                HighlightEntireFile,
-                CopyHighlightedText,
-                HighlightCurrentLine,
-                RemoveCurrentLine,
-                OpenFile,
-                Save,
-                SaveAs,
-                Paste,
-                CutHighlightedText,
-                Redo,
-                Undo,
-                ZoomOut,
-                ZoomIn
-            };
-
-            for (int i = 0; i < StackArrayLen(keyCommands); ++i)
-            {
-                if (KeyCommandDown(keyCommands[i]))
+                if (KeyCommandDown(commandBindings[i]))
                 {
-                    keyCommandCallbacks[i]();
+                    commandBindings[i].callback();
                     break;
                 }
             }
@@ -1588,7 +1567,7 @@ void Draw(float dt)
     DrawRect(screenDims, userSettings.backgroundColour);
     
     //Get correct position for cursor
-    const IntPair start = {TEXT_X_OFFSET, screenBuffer.height - (int)fontData.maxHeight}; 
+    const IntPair start = {TEXT_X_OFFSET, screenBuffer.height - (int)fontData.maxHeight - 5}; 
     IntPair cursorDrawPos = start;
     for (int i = 0; i < editor.cursorPos.textAt; ++i)
         cursorDrawPos.x += fontData.chars[editor.lines[editor.cursorPos.line][i]].advance;
@@ -1608,7 +1587,7 @@ void Draw(float dt)
         editor.textOffset.x -= fontData.chars[cursorChar].advance;
 	cursorDrawPos.x -= editor.textOffset.x;
 
-    int yBottomLimit = (int)fontSizes[fontData.sizeIndex];
+    int yBottomLimit = (int)(fontData.maxHeight + fontData.lineGap);
     if (cursorDrawPos.y < yBottomLimit)
         editor.textOffset.y = max(editor.textOffset.y, yBottomLimit - cursorDrawPos.y);
     else
@@ -1616,7 +1595,7 @@ void Draw(float dt)
         
     int yTopLimit = start.y - editor.textOffset.y;
     if (cursorDrawPos.y > yTopLimit)
-        editor.textOffset.y -= (int)fontSizes[fontData.sizeIndex];
+        editor.textOffset.y -= (int)(fontData.maxHeight + fontData.lineGap);
     cursorDrawPos.y += editor.textOffset.y;
 
     Rect textBounds = {start.x, xRightLimit, yBottomLimit, 0};
@@ -1719,11 +1698,11 @@ void Draw(float dt)
 		int topXOffset = 
             TextPixelLength(editor.lines[highlightInfo.top.line].str, highlightInfo.top.textAt);
         int topX = start.x + topXOffset - editor.textOffset.x;
-        int topY = start.y - highlightInfo.top.line * (int)fontSizes[fontData.sizeIndex] - PIXELS_UNDER_BASELINE + 
-                   editor.textOffset.y;
+        int topY = start.y - highlightInfo.top.line * (int)(fontData.maxHeight + fontData.lineGap) 
+                   - PIXELS_UNDER_BASELINE + editor.textOffset.y;
         if (editor.lines[highlightInfo.top.line].len == 0) topXOffset = fontData.chars[' '].advance;
         DrawAlphaRect(
-            {topX, topX + topHighlightPixelLength, topY, topY + (int)fontSizes[fontData.sizeIndex]},
+            {topX, topX + topHighlightPixelLength, topY, topY + (int)(fontData.maxHeight + fontData.lineGap)},
             userSettings.highlightColour, 
             textBounds
         );
@@ -1734,9 +1713,10 @@ void Draw(float dt)
             int highlightedPixelLength = TextPixelLength(editor.lines[i].toStr()); 
             if (editor.lines[i].len == 0) highlightedPixelLength = fontData.chars[' '].advance;
             int x = start.x - editor.textOffset.x;
-            int y = start.y - i * (int)fontSizes[fontData.sizeIndex] - PIXELS_UNDER_BASELINE + editor.textOffset.y;
+            int y = start.y - i * (int)(fontData.maxHeight + fontData.lineGap) 
+                    - PIXELS_UNDER_BASELINE + editor.textOffset.y;
             DrawAlphaRect(
-                {x, x + highlightedPixelLength, y, y + (int)fontSizes[fontData.sizeIndex]}, 
+                {x, x + highlightedPixelLength, y, y + (int)(fontData.maxHeight + fontData.lineGap)}, 
                 userSettings.highlightColour, 
                 textBounds
             );
@@ -1749,12 +1729,15 @@ void Draw(float dt)
                 TextPixelLength(editor.lines[highlightInfo.bottom.line].str, 
                                 highlightInfo.bottom.textAt);
             int bottomX = start.x - editor.textOffset.x;
-            int bottomY = start.y - highlightInfo.bottom.line * (int)fontSizes[fontData.sizeIndex] 
+            int bottomY = start.y - highlightInfo.bottom.line * (int)(fontData.maxHeight + fontData.lineGap) 
                           - PIXELS_UNDER_BASELINE + editor.textOffset.y;
             if (editor.lines[highlightInfo.bottom.line].len == 0) 
                 bottomHighlightPixelLength = fontData.chars[' '].advance;
             DrawAlphaRect(
-                {bottomX, bottomX + bottomHighlightPixelLength, bottomY, bottomY + (int)fontSizes[fontData.sizeIndex]}, 
+                {
+                    bottomX, bottomX + bottomHighlightPixelLength, 
+                    bottomY, bottomY + (int)(fontData.maxHeight + fontData.lineGap)
+                }, 
                 userSettings.highlightColour, 
                 textBounds
             );

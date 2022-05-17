@@ -564,8 +564,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         //swprintf_s(log, L"dt: %fs, FPS: %lli\n", deltaTime, fps);
         //OutputDebugString(log);
 
-        //for (int i = 0; i < NUM_INPUTS; ++i)
-        //    win32_LogInput((InputCode)i);
+        //for (int i = 0; i < NUM_INPUTS; ++i) win32_LogInput((InputCode)i);
 
         //wchar log[100];
         //swprintf_s(log, L"MousePos: {%i, %i}.\n", input.mousePixelPos.x, input.mousePixelPos.y);
