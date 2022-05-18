@@ -125,8 +125,11 @@ inline int RoundToInt(float x)
 
 void FreeWin32(void* memory);
 
-char* ReadEntireFileAsCstr(char* fileName, uint32* fileLen = nullptr);
-uchar* ReadEntireFileUChar(char* fileName, uint32* fileLen = nullptr);
+void* ReadEntireFile(string fileName, int* fileLen = nullptr);
+inline void* ReadEntireFile(char* fileName, int* fileLen = nullptr)
+{
+    return ReadEntireFile(cstring(fileName), fileLen);
+}
 string ReadEntireFileAsString(string fileName);
 bool WriteToFile(string fileName, string text, bool overwrite, int32 writeStart = 0);
 

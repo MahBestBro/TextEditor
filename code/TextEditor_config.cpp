@@ -18,6 +18,8 @@ UserSettings LoadUserSettingsFromConfigFile()
         MemberMetaData memberData = UserSettingsMemberMetaData[i];
         string val = SubString(line, IndexOfCharInString(line, ' ') + 1);
 
+        Assert(IndexOfCharInString(val, ' ') == -1);
+
         switch(memberData.type)
         {
             case TYPE_Colour:
@@ -75,6 +77,15 @@ UserSettings LoadUserSettingsFromConfigFile()
             case TYPE_bool:
             {
                 UNIMPLEMENTED("TODO: Implement once needed")
+            } break;
+
+            case TYPE_string:
+            {
+                int start = IndexOfCharInString(val, '"') + 1;
+                int end = IndexOfLastCharInString(val, '"');
+                string str = SubString(val, start, end);
+
+                *(string*)MemberPtr(result, memberData.offset) = string{str.cstr(), str.len};
             } break;
         }
 

@@ -8,7 +8,7 @@
 void ResizeFont(int fontSizeIndex)
 {
     stbtt_fontinfo fontInfo;
-    uchar* ttfFile = ReadEntireFileUChar("fonts/consolab.ttf", 0);
+    uchar* ttfFile = (uchar*)ReadEntireFile(userSettings.fontFile, 0);
     stbtt_InitFont(&fontInfo, ttfFile, stbtt_GetFontOffsetForIndex(ttfFile, 0));
 
     int offsetAboveBaseline, offsetBelowBaseline, lineGap;
@@ -39,10 +39,4 @@ void ResizeFont(int fontSizeIndex)
     } 
 
     FreeWin32(ttfFile);
-}
-
-void ChangeFont(string ttfFileName)
-{
-    //All the FTT shit in here
-    //FT_Done_Face frees a ft_face I think
 }

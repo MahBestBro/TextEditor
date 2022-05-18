@@ -1361,8 +1361,6 @@ void Init()
         editor.lines[i] = init_string_buf(LINE_CHUNK_SIZE, lineMemoryAllocator);
     
     editor.fileName = init_string_buf("");
-
-    userSettings = LoadUserSettingsFromConfigFile();
     
     tokenInfo = InitTokenInfo();
 }
@@ -1489,7 +1487,11 @@ void Draw(float dt)
             capslockOn = !capslockOn;
 
         if (InputDown(input.f5))
+        {
+            free(userSettings.fontFile.str); //TODO: Get this free outta here once we have more than one string
             userSettings = LoadUserSettingsFromConfigFile();
+            ResizeFont(fontData.sizeIndex); //Rename function perhaps?
+        }
 
 
         if (InputDown(input.leftMouse))

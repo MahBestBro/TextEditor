@@ -1,5 +1,6 @@
 MemberMetaData UserSettingsMemberMetaData[] =
 {
+    {TYPE_string, StructOffset(UserSettings, fontFile)},
     {TYPE_Colour, StructOffset(UserSettings, backgroundColour)},
     {TYPE_Colour, StructOffset(UserSettings, lineNumColour)},
     {TYPE_Colour, StructOffset(UserSettings, cursorColour)},

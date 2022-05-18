@@ -9,7 +9,8 @@ enum MetaType
     TYPE_Colour,
     TYPE_ColourRGBA,
     TYPE_int,
-    TYPE_bool
+    TYPE_bool,
+    TYPE_string
 };
 
 struct MemberMetaData

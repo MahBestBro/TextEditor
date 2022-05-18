@@ -13,6 +13,7 @@ struct FontChar
 
 struct Font
 {
+    string fontName;
     FontChar chars[128];
     int sizeIndex = 3;
     uint32 maxHeight;

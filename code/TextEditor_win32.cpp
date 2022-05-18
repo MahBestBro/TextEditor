@@ -67,9 +67,9 @@ void FreeWin32(void* mem)
     VirtualFree(mem, 0, MEM_RELEASE);
 }
 
-string ReadEntireFileAsString(string fileName)
+void* ReadEntireFile(string fileName, int* fileLen)
 {
-    string result = {0};
+    void* result = nullptr;
 
     char* fileNameCStr = fileName.cstr();
     HANDLE fileHandle = CreateFileA(
@@ -88,74 +88,14 @@ string ReadEntireFileAsString(string fileName)
         if (GetFileSizeEx(fileHandle, &fileSize))
         {
             uint32 fileSize32 = SafeTruncateSize32(fileSize.QuadPart);
-            result.str = (char*)VirtualAlloc(0, fileSize32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-            if (result.str)
-            {
-                DWORD bytesRead;
-                if(ReadFile(fileHandle, result.str, fileSize32, &bytesRead, 0) && 
-                   fileSize32 == bytesRead)
-                {
-                    //File read Successfully!
-                    result.len = fileSize32;
-                }
-                else
-                {
-                    VirtualFree(result.str, 0, MEM_RELEASE);
-                    result.str = nullptr;
-                }
-            }
-            else
-            {
-                //Log
-            }
-        }
-        else
-        {
-            //Log
-        }
-        CloseHandle(fileHandle);
-    }
-    else
-    {
-        //Log
-        win32_LogError();
-    }
-
-    return result;
-}
-
-char* ReadEntireFileAsCstr(char* fileNameCStr, uint32* fileLen)
-{
-    char* result = nullptr;
-
-    HANDLE fileHandle = CreateFileA(
-        fileNameCStr, 
-        GENERIC_READ, 
-        FILE_SHARE_READ, 
-        0, 
-        OPEN_EXISTING, 
-        0, 0
-    );
-
-    if (fileHandle != INVALID_HANDLE_VALUE)
-    {
-        LARGE_INTEGER fileSize;
-        if (GetFileSizeEx(fileHandle, &fileSize))
-        {
-            uint32 fileSize32 = SafeTruncateSize32(fileSize.QuadPart);
-            result = (char*)VirtualAlloc(0, fileSize32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+            result = VirtualAlloc(0, fileSize32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
             if (result)
             {
                 DWORD bytesRead;
-                if(ReadFile(fileHandle, result, fileSize32, &bytesRead, 0) && 
-                   fileSize32 == bytesRead)
+                if(ReadFile(fileHandle, result, fileSize32, &bytesRead, 0) && fileSize32 == bytesRead)
                 {
                     //File read Successfully!
-                    if (fileLen)
-                    {
-                        *fileLen = fileSize32;
-                        Assert(result[*fileLen] == 0); //I do not know whether ReadFile null terminates, if you hit this, this means the issue is solved and it doesn't null terminate
-                    }   
+                    if (fileLen) *fileLen = fileSize32;
                 }
                 else
                 {
@@ -178,69 +118,15 @@ char* ReadEntireFileAsCstr(char* fileNameCStr, uint32* fileLen)
     {
         //Log
         win32_LogError();
-        
     }
 
     return result;
 }
 
-uchar* ReadEntireFileUChar(char* fileNameCStr, uint32* fileLen)
+string ReadEntireFileAsString(string fileName)
 {
-    uchar* result = nullptr;
-
-    HANDLE fileHandle = CreateFileA(
-        fileNameCStr, 
-        GENERIC_READ, 
-        FILE_SHARE_READ, 
-        0, 
-        OPEN_EXISTING, 
-        0, 0
-    );
-
-    if (fileHandle != INVALID_HANDLE_VALUE)
-    {
-        LARGE_INTEGER fileSize;
-        if (GetFileSizeEx(fileHandle, &fileSize))
-        {
-            uint32 fileSize32 = SafeTruncateSize32(fileSize.QuadPart);
-            result = (uchar*)VirtualAlloc(0, fileSize32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-            if (result)
-            {
-                DWORD bytesRead;
-                if(ReadFile(fileHandle, result, fileSize32, &bytesRead, 0) && 
-                   fileSize32 == bytesRead)
-                {
-                    //File read Successfully!
-                    if (fileLen)
-                    {
-                        *fileLen = fileSize32;
-                        Assert(result[*fileLen] == 0); //I do not know whether ReadFile null terminates, if you hit this, this means the issue is solved and it doesn't null terminate
-                    }   
-                }
-                else
-                {
-                    VirtualFree(result, 0, MEM_RELEASE);
-                    result = nullptr;
-                }
-            }
-            else
-            {
-                //Log
-            }
-        }
-        else
-        {
-            //Log
-        }
-        CloseHandle(fileHandle);
-    }
-    else
-    {
-        //Log
-        win32_LogError();
-        
-    }
-
+    string result;
+    result.str = (char*)ReadEntireFile(fileName, &result.len);
     return result;
 }
 
@@ -512,8 +398,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         return 0;
     }
 
+    userSettings = LoadUserSettingsFromConfigFile();
+
     stbtt_fontinfo fontInfo;
-    uchar* ttfFile = ReadEntireFileUChar("fonts/consolab.ttf");
+    uchar* ttfFile = (uchar*)ReadEntireFile(userSettings.fontFile);
     stbtt_InitFont(&fontInfo, ttfFile, stbtt_GetFontOffsetForIndex(ttfFile, 0));
 
     int offsetAboveBaseline, offsetBelowBaseline, lineGap;

@@ -1,3 +1,4 @@
+fontFile "fonts/consolai.ttf"
 backgroundColour 39,40,34
 lineNumColour 144,144,138
 cursorColour 255,255,255
