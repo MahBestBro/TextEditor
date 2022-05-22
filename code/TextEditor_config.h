@@ -13,6 +13,7 @@ INTROSPECT("GenerateStructMemberOffsets") struct UserSettings
     Colour lineNumColour;
     Colour cursorColour;
     ColourRGBA highlightColour;
+    Colour lineBackgroundColour;
     Colour defaultTextColour;
     
     union 

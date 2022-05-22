@@ -5,6 +5,7 @@ MemberMetaData UserSettingsMemberMetaData[] =
     {TYPE_Colour, StructOffset(UserSettings, lineNumColour)},
     {TYPE_Colour, StructOffset(UserSettings, cursorColour)},
     {TYPE_ColourRGBA, StructOffset(UserSettings, highlightColour)},
+    {TYPE_Colour, StructOffset(UserSettings, lineBackgroundColour)},
     {TYPE_Colour, StructOffset(UserSettings, defaultTextColour)},
     {TYPE_Colour, StructOffset(UserSettings, punctuationColour)},
     {TYPE_Colour, StructOffset(UserSettings, operatorColour)},

@@ -188,7 +188,7 @@ void CopyToClipboard(string text)
 
     lptstrCopy = (LPTSTR)GlobalLock(hglbCopy);
     memcpy(lptstrCopy, CStrToWStr(text.str, text.len), text.len * sizeof(wchar)); 
-    lptstrCopy[text.len] = (wchar)0;    // null character 
+    lptstrCopy[text.len] = (wchar)0;
     GlobalUnlock(hglbCopy); 
 
     SetClipboardData(CF_UNICODETEXT, hglbCopy); 
@@ -341,11 +341,8 @@ internal void win32_ResizeDIB(int width, int height)
 
 }
 
-internal void win32_UpdateWindow(HDC deviceContext, //RECT* windowRect, 
-                                 int x, int y, int width, int height)
+internal void win32_UpdateWindow(HDC deviceContext, int x, int y, int width, int height)
 {
-    //int windowWidth = windowRect->right - windowRect->left;
-    //int windowHeight = windowRect->bottom - windowRect->top;
     StretchDIBits(
         deviceContext, 
         0, 0, screenBuffer.width, screenBuffer.height,
@@ -460,6 +457,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         win32_ProcessInput();
 
+        //If the text editor is not the current app, reset the input
+        HWND currentWindow = GetForegroundWindow();
+        if (currentWindow != hwnd) input = {0};
+
         MSG msg;
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
         {
@@ -477,7 +478,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         GetClientRect(hwnd, &windowRect);
         int windowWidth = windowRect.right - windowRect.left;
         int windowHeight = windowRect.bottom - windowRect.top;
-        win32_UpdateWindow(hdc, /*&windowRect,*/ 0, 0, windowWidth, windowHeight);
+        win32_UpdateWindow(hdc, 0, 0, windowWidth, windowHeight);
         ReleaseDC(hwnd, hdc);
 
         FlushStringArena(&temporaryStringArena);
@@ -518,10 +519,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             int y = paint.rcPaint.top;
             int width = paint.rcPaint.right - paint.rcPaint.left;
             int height = paint.rcPaint.bottom - paint.rcPaint.top;
-            //FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW+1));
+
             RECT clientRect;
             GetClientRect(hwnd, &clientRect);
-            win32_UpdateWindow(hdc, /*&clientRect,*/ x, y, width, height);
+            win32_UpdateWindow(hdc, x, y, width, height);
 
 
             EndPaint(hwnd, &paint);

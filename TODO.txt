@@ -1,7 +1,6 @@
 There's no strict order but generally speaking the closer to the top the more important
 
 FEATURES: 
-    - Brighten up current line?
     - Wrap Text
     - Find and Replace
     - The rest of the default commands (do some research)
@@ -27,14 +26,10 @@ PROGRAMMING/REFACTORING:
     - Refactor Undo System, especially the string stuff
     - Idea for syntax highlighting customisation
         - have tokenisers be something user compiles (give demo one though)
-        - have bindings for strings and chars to colours
-    - Have tokeniser only produce tokens for what's on screen 
+        - have bindings for strings and chars to colours 
     - Consider removing editor moving side effects from functions?
     - Have a function that can map a callback function to an input
         - Pass in inputcode and function pointer which'll be mapped to input.
         - Add optional repeat option which adds timed event.
     - Refactor timed events, make them neater and more flexibe if possible?
-
-BUG FIXES:
-    - Fix bug where mouse input that happens outside of window does not get updated
     

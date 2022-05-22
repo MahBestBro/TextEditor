@@ -7,7 +7,7 @@
 #include "TextEditor_config.h"
 #include "TextEditor_tokeniser.h"
 
-#define TEXT_X_OFFSET 52
+#define MAX_LINE_NUM_DIGITS 6
 #define PIXELS_UNDER_BASELINE 5
 #define LINE_NUM_OFFSET ((fontData.chars[' '].advance) * 4)
 
@@ -757,7 +757,7 @@ EditorPos GetEditorPosAtMouse()
     int mouseLine = (screenBuffer.height - input.mousePixelPos.y) / (fontData.maxHeight + fontData.lineGap);
     result.line = min(mouseLine, editor.numLines - 1);
     
-    int linePixLen = TEXT_X_OFFSET;
+    int linePixLen = MAX_LINE_NUM_DIGITS * (int)fontData.chars['0'].advance;
     result.textAt = 0;
     string_buf line = editor.lines[result.line];
     while (linePixLen < input.mousePixelPos.x && result.textAt < line.len)
@@ -921,6 +921,7 @@ void RemoveChar()
     UndoInfo* currentUndo = &editor.undoStack[editor.numUndos - 1];
 	string_buf* undoReverseBuffer = &editor.undoStack[editor.numUndos - 1].text;
 
+    //TODO: Fix bug where when a deleted quote is undone, it appears in the wrong spot
     if (currentUndo->type != UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER || 
         editor.cursorPos != currentUndo->end)
     {
@@ -1569,7 +1570,11 @@ void Draw(float dt)
     DrawRect(screenDims, userSettings.backgroundColour);
     
     //Get correct position for cursor
-    const IntPair start = {TEXT_X_OFFSET, screenBuffer.height - (int)fontData.maxHeight - 5}; 
+    const IntPair start = 
+    {
+        36 + MAX_LINE_NUM_DIGITS * (int)fontData.chars['0'].advance, 
+        screenBuffer.height - (int)fontData.maxHeight - 5
+    }; 
     IntPair cursorDrawPos = start;
     for (int i = 0; i < editor.cursorPos.textAt; ++i)
         cursorDrawPos.x += fontData.chars[editor.lines[editor.cursorPos.line][i]].advance;
@@ -1600,20 +1605,34 @@ void Draw(float dt)
         editor.textOffset.y -= (int)(fontData.maxHeight + fontData.lineGap);
     cursorDrawPos.y += editor.textOffset.y;
 
+    //Draw Line Background
+    Rect lineBackgroundDims = 
+    {
+        0, 
+        screenBuffer.width, 
+        cursorDrawPos.y, 
+        cursorDrawPos.y + (int)(fontData.maxHeight + fontData.lineGap)
+    };
+    DrawRect(lineBackgroundDims, userSettings.lineBackgroundColour);
+
     Rect textBounds = {start.x, xRightLimit, yBottomLimit, 0};
 
     //Draw all of the text on screen
+    int numLinesOnScreen = screenBuffer.height / (int)(fontData.maxHeight + fontData.lineGap);
+    int firstLine = abs(editor.textOffset.y) / (int)(fontData.maxHeight + fontData.lineGap);
     if (IsTokenisable(editor.fileName.toStr()))
     {
         //Draw first number always just in case there's no text at all
 	    DrawText(lstring("1"),
-	    	     start.x - LINE_NUM_OFFSET,
-	    	     start.y - editor.textOffset.y,
+	    	     start.x - fontData.chars['1'].advance - LINE_NUM_OFFSET,
+	    	     start.y + editor.textOffset.y,
 	    	     userSettings.lineNumColour,
 	    	     {0, 0, yBottomLimit, screenBuffer.height});
 
         int x = 0;
-        for (int t = 0; t < tokenInfo.numTokens; ++t)
+        int numLinesTokenised = 0; 
+        int t = tokenInfo.lineSkipIndicies[firstLine];
+        while (numLinesTokenised < numLinesOnScreen && t < tokenInfo.numTokens)
         {
             Token token = tokenInfo.tokens[t];
 
@@ -1630,10 +1649,10 @@ void Draw(float dt)
 			if (!prevTokenOnSameLine)
             {
                 //Draw Line num
-                char lineNumText[8]; //TODO: Calculate how many lines we want max cause fucking ey this will likely go to shit
+                char lineNumText[MAX_LINE_NUM_DIGITS + 1]; //TODO: Calculate how many lines we want max cause fucking ey this will likely go to shit
                 IntToString(token.at.line + 1, lineNumText);
                 DrawText(cstring(lineNumText), 
-                         start.x - LINE_NUM_OFFSET, 
+                         start.x - TextPixelLength(cstring(lineNumText)) - LINE_NUM_OFFSET, 
                          y, 
                          userSettings.lineNumColour, 
                          {0, 0, yBottomLimit, screenBuffer.height});
@@ -1663,11 +1682,14 @@ void Draw(float dt)
                 DrawText(text, x, y, textColour, textBounds);
                 x += TextPixelLength(text);
             }
+
+            t++;
+			numLinesTokenised += !nextTokenOnSameLine;
         }
     }
     else
     {
-        for (int i = 0; i < editor.numLines; ++i)
+        for (int i = firstLine; i < editor.numLines && i < firstLine + numLinesOnScreen; ++i)
         {
             //Draw text
             int x = start.x - editor.textOffset.x;
@@ -1678,7 +1700,7 @@ void Draw(float dt)
             char lineNumText[8];
             IntToString(i + 1, lineNumText);
             DrawText(cstring(lineNumText), 
-                     start.x - LINE_NUM_OFFSET, 
+                     start.x - TextPixelLength(cstring(lineNumText)) - LINE_NUM_OFFSET, 
                      y, 
                      userSettings.lineNumColour, 
                      {0, 0, yBottomLimit, 0});

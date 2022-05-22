@@ -38,7 +38,6 @@ enum MultilineState
     MS_COMMENT
 };
 
-//TODO: Add EditorPos member to make look ups easier
 struct Token
 {
     EditorPos at;
@@ -48,7 +47,8 @@ struct Token
 
 struct TokenInfo
 {
-    Token* tokens = NULL;
+    Token* tokens = nullptr;
+    int* lineSkipIndicies = nullptr;
     int size = 256;
     int numTokens = 0;
 };

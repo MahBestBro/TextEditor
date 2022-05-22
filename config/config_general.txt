@@ -1,8 +1,9 @@
-fontFile "fonts/consolai.ttf"
+fontFile "fonts/consolab.ttf"
 backgroundColour 39,40,34
 lineNumColour 144,144,138
 cursorColour 255,255,255
 highlightColour 225,225,225,83
+lineBackgroundColour 62,63,54
 defaultTextColour 248,248,242
 punctuationColour 248,248,242
 operatorColour 249,38,114

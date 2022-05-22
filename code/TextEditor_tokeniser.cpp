@@ -159,41 +159,56 @@ void AddTypeNameForTypedef(EditorPos at)
 string inbuiltTypes[] = 
 {
     lstring("int"), 
+    lstring("short"), 
+    lstring("long"), 
     lstring("float"), 
+    lstring("double"), 
     lstring("char"), 
     lstring("void"), 
     lstring("bool"), 
     lstring("struct"), 
+    lstring("class"), 
+    lstring("union"), 
     lstring("enum"), 
     lstring("unsigned"),
-    lstring("namespace")
+    lstring("namespace"),
+    lstring("auto")
 };
 
 string keywords[] = 
 {
     lstring("return"), 
     lstring("static"), 
+    lstring("const"), 
     lstring("if"), 
     lstring("else"), 
+    lstring("switch"),
+    lstring("case"),
+    lstring("default"),
     lstring("for"), 
     lstring("do"),
     lstring("while"), 
+    lstring("break"),  
     lstring("typedef"),
     lstring("inline"),
     lstring("extern"),
-    lstring("using")
+    lstring("using"),
+    lstring("volatile")
 };
 
 string preprocessorTags[] = 
 {
     lstring("#include"), 
     lstring("#define"), 
+    lstring("#undef"), 
     lstring("#if"), 
     lstring("#elif"), 
     lstring("#else"), 
     lstring("#ifdef"), 
     lstring("#ifndef"),
-    lstring("#endif")
+    lstring("#endif"),
+    lstring("#error"),
+    lstring("#pragma")
 };
 
 Token GetTokenFromLine(string_buf code, int lineIndex, int* lineAt, MultilineState* ms)
@@ -350,16 +365,16 @@ Token GetTokenFromLine(string_buf code, int lineIndex, int* lineAt, MultilineSta
             }
         } break;
 
+        case '\'':
         case '"':
         {
-            //TODO: Handle \"
             token.type = TOKEN_STRING;
 
             int start = at;
-            while(at < code.len && code[at] != '"') ++at;
+            while(at < code.len && (code[at] != c || code[at - 1] == '\\')) ++at;
             token.text.len = at - start + 1;
             
-            if (at < code.len && code[at] == '"')
+            if (at < code.len && code[at] == c)
             {
                 ++token.text.len;
                 ++at;    
@@ -487,6 +502,7 @@ TokenInfo InitTokenInfo()
 {
     TokenInfo result;
     result.tokens = HeapAlloc(Token, result.size);
+    result.lineSkipIndicies = HeapAlloc(int, result.size);
     return result;
 }
 
@@ -520,16 +536,29 @@ void Tokenise(TokenInfo* dest)
     numPoundDefines = 0;
     dest->numTokens = 0;
 
+    int tokenIndex = 0;
     MultilineState multilineState = MS_NON_MULTILINE;
     for (int i = 0; i < editor.numLines; ++i)
     {
-        int lineAt = 0;
-        bool parsing = true;
-        while (parsing)
+		int lineAt = 0;
+        bool parsingLine = true;
+
+        dest->lineSkipIndicies[i] = tokenIndex;
+
+        while (parsingLine)
         {
             Token token = GetTokenFromLine(editor.lines[i], i, &lineAt, &multilineState);
-            AppendToDynamicArray(dest->tokens, dest->numTokens, token, dest->size);
-            parsing = (lineAt < editor.lines[i].len);
+            
+            dest->tokens[dest->numTokens++] = token;
+            if (dest->numTokens >= dest->size)
+            {
+                dest->size *= 2;
+                dest->tokens = HeapRealloc(Token, dest->tokens, dest->size);
+                dest->lineSkipIndicies = HeapRealloc(int, dest->lineSkipIndicies, dest->size);
+            }
+            
+            parsingLine = (lineAt < editor.lines[i].len);
+            tokenIndex++;
         }
     }
 }
