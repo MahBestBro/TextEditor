@@ -1326,8 +1326,6 @@ internal EditorPos prevMousePos = {-1, -1};
 internal bool capslockOn = false;
 internal bool nonCharKeyPressed = false;
 
-internal UserSettings userSettings;
-
 //TODO: Generalise all this stuff into a single struct,would be simpler imo
 KeyBinding nonCharKeyBindings[] =
 {
@@ -1363,6 +1361,8 @@ void Init()
     
     editor.fileName = init_string_buf("");
     
+    LoadTokenColours();
+
     tokenInfo = InitTokenInfo();
 }
 
@@ -1550,7 +1550,7 @@ void Draw(float dt)
                 }
             }
         }
-    }
+    }    
 
     //Only caught this bug when using mouse but putting it here since may save my back in other situations
     if (editor.highlightStart == editor.cursorPos)
@@ -1668,8 +1668,7 @@ void Draw(float dt)
             string text = token.text;
 
             //Draw token
-            Colour textColour = userSettings.tokenColours[token.type];
-            DrawText(text, x, y, textColour, textBounds);
+            DrawText(text, x, y, token.colour, textBounds);
             x += TextPixelLength(text);
 
             //Draw whitespace
@@ -1679,7 +1678,7 @@ void Draw(float dt)
                 int remainderLength = (int)(tokenInfo.tokens[t + 1].text.str - token.text.str) 
                                       - token.text.len;
                 text.len = remainderLength;
-                DrawText(text, x, y, textColour, textBounds);
+                DrawText(text, x, y, token.colour, textBounds);
                 x += TextPixelLength(text);
             }
 

@@ -218,7 +218,7 @@ void GenerateStructMemberOffsets(char* code)
 
                 //printf("Type: %.*s\n", (int)memberTypeLen, memberType);
 
-                code = AdvanceToNextLine(code);
+                code = AdvanceToNextLine(code) - 1; //-1 here because code++ in loop skips over first char
             } break;
 
             case '{': scopeDepth++; break;

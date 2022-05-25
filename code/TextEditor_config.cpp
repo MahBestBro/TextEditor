@@ -26,7 +26,6 @@ UserSettings LoadUserSettingsFromConfigFile()
             {
                 Colour colour;
 
-                //int offset = 0;
                 bool success = true;
 
                 byte r = StringToByte(AdvanceToCharAndSplitString(&val, ','), &success);

@@ -6,6 +6,28 @@
 
 #define INITIAL_TYPEDEFS_SIZE 64
 
+union TokenColours
+{
+    struct 
+    {
+        Colour punctuationColour;
+        Colour operatorColour;
+        Colour stringColour;
+        Colour numberColour;
+        Colour boolColour;
+        Colour identifierColour;
+        Colour functionColour;
+        Colour customTypeColour;
+        Colour inbuiltTypeColour;
+        Colour keywordColour;
+        Colour preprocessorColour;
+        Colour defineColour;
+        Colour commentColour;
+        Colour unknownColour;
+    };
+    Colour colours[NUM_TOKENS - 1];
+};
+
 struct LineView
 {
     int lineIndex;
@@ -14,6 +36,8 @@ struct LineView
 
 extern Editor editor;
 
+internal TokenColours tokenColours;
+
 //DefinedTokenHashSet types = InitHashSet();
 internal LineView typedefs[INITIAL_TYPEDEFS_SIZE];
 internal int numTypedefs = 0;
@@ -21,6 +45,40 @@ internal int numTypedefs = 0;
 //DefinedTokenHashSet defines = InitHashSet();
 internal LineView poundDefines[INITIAL_TYPEDEFS_SIZE];
 internal int numPoundDefines = 0;
+
+void LoadTokenColours()
+{
+    //TODO: Log error or something
+    string file = ReadEntireFileAsString(lstring("config/config_tokeniser.txt"));
+    Assert(file.str);
+
+    string line = GetNextLine(&file);
+    for (int i = 0; line[0]; ++i)
+    {
+        string val = SubString(line, IndexOfCharInString(line, ' ') + 1);
+
+        Colour colour;
+        bool success = true;
+
+        byte r = StringToByte(AdvanceToCharAndSplitString(&val, ','), &success);
+        Assert(success);
+        colour.r = r;
+
+        byte g = StringToByte(AdvanceToCharAndSplitString(&val, ','), &success);
+        Assert(success);
+        colour.g = g;
+
+        byte b = StringToByte(AdvanceToCharAndSplitString(&val, ','), &success);
+        Assert(success);
+        colour.b = b;
+
+        tokenColours.colours[i] = colour;
+
+        line = GetNextLine(&file);
+    }
+
+    FreeWin32(file.str);
+}
 
 const string integerSuffixes[] = 
 {
@@ -225,7 +283,7 @@ Token GetTokenFromLine(string_buf code, int lineIndex, int* lineAt, MultilineSta
 	if (at == code.len)
 	{
 		token.text.len = 0;
-		token.type = TOKEN_EOS;
+		token.type = TOKEN_UNKNOWN;
         *lineAt = code.len;
         return token;
 	}
@@ -284,7 +342,7 @@ Token GetTokenFromLine(string_buf code, int lineIndex, int* lineAt, MultilineSta
     switch(c)
     {
         case '\0': 
-            token.type = TOKEN_EOS; 
+            token.type = TOKEN_UNKNOWN; 
             break;
 
         case '(': 
@@ -310,32 +368,26 @@ Token GetTokenFromLine(string_buf code, int lineIndex, int* lineAt, MultilineSta
         case '!': 
         case '?': 
         case ':': 
+        case '>':   //NOTE: Don't need to check for arrow operator because the above skips over the > if it is an arrow operator
             token.type = TOKEN_OPERATOR;      
             break;
 
         case '-': 
         {
+            token.type = TOKEN_OPERATOR;
+
             if (code[at] == '>')
             {
                 token.type = TOKEN_PUNCTUATION;
                 token.text.len = 2;
                 at++;
             } 
-            else
-            {
-                token.type = TOKEN_OPERATOR;
-            }
-        } break;
-
-        case '>': 
-        {
-            //NOTE: Don't need to check for arrow operator because the above skips over the > if it is an arrow operator
-            token.type = TOKEN_OPERATOR;
         } break;
 
         case '/':
         {
             token.type = TOKEN_OPERATOR;
+
             if (code[at] == '/' || code[at] == '*')
             {
 				if (code[at] == '*')
@@ -399,7 +451,6 @@ Token GetTokenFromLine(string_buf code, int lineIndex, int* lineAt, MultilineSta
             if (IsInStringArray(token.text, preprocessorTags, StackArrayLen(preprocessorTags)))
             {
                 token.type = TOKEN_PREPROCESSOR_TAG;
-
                 
                 if (token.text == lstring("#define"))
                 {
@@ -548,6 +599,7 @@ void Tokenise(TokenInfo* dest)
         while (parsingLine)
         {
             Token token = GetTokenFromLine(editor.lines[i], i, &lineAt, &multilineState);
+            token.colour = tokenColours.colours[token.type]; //TODO: Move this line into separate function for customisability
             
             dest->tokens[dest->numTokens++] = token;
             if (dest->numTokens >= dest->size)

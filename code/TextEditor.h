@@ -26,6 +26,16 @@ struct Colour
     byte r, g, b;
 };
 
+inline bool operator==(Colour lhs, Colour rhs)
+{
+    return lhs.r == rhs.r && lhs.g == rhs.g && lhs.b == rhs.b; 
+}
+
+inline bool operator!=(Colour lhs, Colour rhs)
+{
+    return !(lhs == rhs); 
+}
+
 struct ColourRGBA
 {
     byte r, g, b, a;
@@ -35,13 +45,6 @@ struct EditorPos
 {
     int textAt;
     int line;
-};
-
-struct ResizableString
-{
-    char* buffer;
-    int size;
-    int len;
 };
 
 struct TextSectionInfo

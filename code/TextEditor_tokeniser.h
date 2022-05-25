@@ -43,6 +43,7 @@ struct Token
     EditorPos at;
     string text;
     TypeOfToken type;
+    Colour colour;
 };
 
 struct TokenInfo
@@ -56,6 +57,6 @@ struct TokenInfo
 TokenInfo InitTokenInfo();
 bool IsTokenisable(string fileName);
 void Tokenise(TokenInfo* dest);
-
+void LoadTokenColours(); //TODO: Make interface within files for customisation reasons
 
 #endif

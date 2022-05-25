@@ -27,6 +27,7 @@ DEF_STRING_ARENA_FUNCS(undoStringArena);
 
 global_variable Input input = {};
 global_variable ScreenBuffer screenBuffer;
+global_variable UserSettings userSettings;
 
 #include "TextEditor_input.cpp"
 #include "TextEditor.cpp"
