@@ -35,6 +35,7 @@ struct LineView
 };
 
 extern Editor editor;
+extern TokenInfo tokenInfo; //TODO: Make this internal
 
 internal TokenColours tokenColours;
 
@@ -577,7 +578,7 @@ bool IsTokenisable(string fileName)
     return false;
 }
 
-void Tokenise(TokenInfo* dest)
+void Tokenise()
 {
     if (!IsTokenisable(editor.fileName.toStr())) return; 
 
@@ -585,7 +586,7 @@ void Tokenise(TokenInfo* dest)
 
     numTypedefs = 0;
     numPoundDefines = 0;
-    dest->numTokens = 0;
+    tokenInfo.numTokens = 0;
 
     int tokenIndex = 0;
     MultilineState multilineState = MS_NON_MULTILINE;
@@ -594,23 +595,89 @@ void Tokenise(TokenInfo* dest)
 		int lineAt = 0;
         bool parsingLine = true;
 
-        dest->lineSkipIndicies[i] = tokenIndex;
+        tokenInfo.lineSkipIndicies[i] = tokenIndex;
 
         while (parsingLine)
         {
             Token token = GetTokenFromLine(editor.lines[i], i, &lineAt, &multilineState);
-            token.colour = tokenColours.colours[token.type]; //TODO: Move this line into separate function for customisability
-            
-            dest->tokens[dest->numTokens++] = token;
-            if (dest->numTokens >= dest->size)
+
+            tokenInfo.tokens[tokenInfo.numTokens++] = token;
+            if (tokenInfo.numTokens >= tokenInfo.size)
             {
-                dest->size *= 2;
-                dest->tokens = HeapRealloc(Token, dest->tokens, dest->size);
-                dest->lineSkipIndicies = HeapRealloc(int, dest->lineSkipIndicies, dest->size);
+                tokenInfo.size *= 2;
+                tokenInfo.tokens = HeapRealloc(Token, tokenInfo.tokens, tokenInfo.size);
+                tokenInfo.lineSkipIndicies = HeapRealloc(int, tokenInfo.lineSkipIndicies, tokenInfo.size);
             }
             
             parsingLine = (lineAt < editor.lines[i].len);
             tokenIndex++;
         }
+    }
+}
+
+void OnFileOpen()
+{
+    Tokenise();
+}
+
+void OnTextChanged()
+{
+    Tokenise();
+}
+
+void HighlightSyntax()
+{
+    if (!IsTokenisable(editor.fileName.toStr())) return; 
+
+    int numLinesOnScreen = screenBuffer.height / (int)(fontData.maxHeight + fontData.lineGap);
+    int firstLine = abs(editor.textOffset.y) / (int)(fontData.maxHeight + fontData.lineGap);
+
+    int x = 0;
+    int numLinesTokenised = 0; 
+    int t = tokenInfo.lineSkipIndicies[firstLine];
+    while (numLinesTokenised < numLinesOnScreen && t < tokenInfo.numTokens)
+    {
+        Token token = tokenInfo.tokens[t];
+
+        bool prevTokenOnSameLine = t > 0 && tokenInfo.tokens[t - 1].at.line == token.at.line;
+        bool nextTokenOnSameLine = t < tokenInfo.numTokens - 1 && 
+                                    tokenInfo.tokens[t + 1].at.line == token.at.line;
+
+        if (t == 0 || !prevTokenOnSameLine)
+            x = TEXT_START.x - editor.textOffset.x;
+        int y = TEXT_START.y - token.at.line * (int)(fontData.maxHeight + fontData.lineGap) 
+                + editor.textOffset.y;
+
+        //Draw whitespace at front of line
+        if (!prevTokenOnSameLine)
+        {
+            if (token.text.str) //TODO: Investigate whether this check is really necessary
+            {
+                int whitespaceLen = (int)(token.text.str - editor.lines[token.at.line].str);
+                x += TextPixelLength(editor.lines[token.at.line].str, whitespaceLen);
+            }
+        }
+
+        //Cleanup once editor lines are string buffers
+        string text = token.text;
+        Colour textColour = tokenColours.colours[token.type];
+
+        //Draw token
+        DrawText(text, x, y, textColour, TEXT_LIMITS);
+        x += TextPixelLength(text);
+
+        //Draw whitespace
+        if (t < tokenInfo.numTokens - 1 && token.text.len > 0 && nextTokenOnSameLine)
+        {
+            text.str += token.text.len;
+            int remainderLength = (int)(tokenInfo.tokens[t + 1].text.str - token.text.str) 
+                                    - token.text.len;
+            text.len = remainderLength;
+            DrawText(text, x, y, textColour, TEXT_LIMITS);
+            x += TextPixelLength(text);
+        }
+
+        t++;
+        numLinesTokenised += !nextTokenOnSameLine;
     }
 }

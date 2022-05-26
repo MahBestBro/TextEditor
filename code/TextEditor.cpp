@@ -243,7 +243,7 @@ void Draw8bppPixels(Rect rect, uint8* pixels, int stride, Colour colour, Rect li
     }
 }
 
-void DrawText(string text, int xCoord, int yCoord, Colour colour, Rect limits = {0})
+void DrawText(string text, int xCoord, int yCoord, Colour colour, Rect limits)
 { 
 	int xAdvance = 0;
     for (int i = 0; i < text.len; i++)
@@ -911,8 +911,6 @@ void AddChar()
     if (addedTwoCharacters) editor.undoStack[editor.numUndos - 1].end.textAt++;
 
     SetTopChangedLine(editor.cursorPos.line);
-
-    Tokenise(&tokenInfo);
 }
 
 void RemoveChar()
@@ -978,8 +976,6 @@ void Backspace()
     {
         RemoveChar();
     }
-
-    Tokenise(&tokenInfo);
 }
 
 void UnTab()
@@ -1049,8 +1045,6 @@ void UnTab()
         editor.undoStack[editor.numUndos - 1].type = UNDOTYPE_MULTILINE_REMOVE;
         editor.undoStack[editor.numUndos - 1].end.line = highlight.bottom.line;
     }
-
-    Tokenise(&tokenInfo);
 }
 
 void Enter()
@@ -1095,8 +1089,6 @@ void Enter()
     
 
     editor.undoStack[editor.numUndos - 1].end = editor.cursorPos;
-
-	Tokenise(&tokenInfo);
 }
 
 void HighlightCurrentLine()
@@ -1158,8 +1150,6 @@ void RemoveCurrentLine()
     ClearHighlights();
     
     SetTopChangedLine(editor.cursorPos.line);
-
-    Tokenise(&tokenInfo);
 }
 
 
@@ -1203,8 +1193,6 @@ void Paste()
         InsertText(textToPaste, editor.cursorPos);
 
         editor.undoStack[editor.numUndos - 1].end = editor.cursorPos;
-
-        Tokenise(&tokenInfo); 
     } 
 }
 
@@ -1220,8 +1208,6 @@ void CutHighlightedText()
 
     RemoveTextSection(GetTextSectionInfo(editor.highlightStart, editor.cursorPos));
     ClearHighlights();
-
-    Tokenise(&tokenInfo);
 }
 
 //TODO: Resize editor.lines if file too big + maybe return success bool?
@@ -1254,7 +1240,7 @@ void OpenFile()
         editor.topChangedLineIndex = -1;
         editor.cursorPos = {0, 0};
 
-        Tokenise(&tokenInfo);
+        OnFileOpen();
     }
 }
 
@@ -1281,8 +1267,6 @@ void Undo()
 
     UndoInfo undoInfo = editor.undoStack[--editor.numUndos];
     HandleUndoInfo(undoInfo, false);
-
-    Tokenise(&tokenInfo);
 }
 
 void Redo()
@@ -1291,8 +1275,6 @@ void Redo()
 
     UndoInfo redoInfo = editor.redoStack[--editor.numRedos];
     HandleUndoInfo(redoInfo, true);
-
-    Tokenise(&tokenInfo);
 }
 
 void ZoomIn()
@@ -1329,8 +1311,11 @@ internal bool nonCharKeyPressed = false;
 //TODO: Generalise all this stuff into a single struct,would be simpler imo
 KeyBinding nonCharKeyBindings[] =
 {
+    //These modify
     {NONE, INPUTCODE_ENTER, Enter},
     {NONE, INPUTCODE_BACKSPACE, Backspace},
+
+    //These do not modify
     {NONE, INPUTCODE_RIGHT, MoveCursorForward},
     {NONE, INPUTCODE_LEFT, MoveCursorBackward},
     {NONE, INPUTCODE_UP, MoveCursorUp},
@@ -1339,17 +1324,20 @@ KeyBinding nonCharKeyBindings[] =
 
 KeyBinding commandBindings[] = 
 {
-    {CTRL, INPUTCODE_A, HighlightEntireFile},
-    {CTRL, INPUTCODE_C, CopyHighlightedText},
-    {CTRL, INPUTCODE_L, HighlightCurrentLine},
+    //These modify
     {CTRL | SHIFT, INPUTCODE_L, RemoveCurrentLine},
-    {CTRL, INPUTCODE_O, OpenFile},
-    {CTRL, INPUTCODE_S, Save},
-    {CTRL | SHIFT, INPUTCODE_S, SaveAs},
     {CTRL, INPUTCODE_V, Paste},
     {CTRL, INPUTCODE_X, CutHighlightedText},
     {CTRL, INPUTCODE_Y, Redo},
     {CTRL, INPUTCODE_Z, Undo},
+
+    //These do not modify
+    {CTRL, INPUTCODE_A, HighlightEntireFile},
+    {CTRL, INPUTCODE_C, CopyHighlightedText},
+    {CTRL, INPUTCODE_L, HighlightCurrentLine},
+    {CTRL, INPUTCODE_O, OpenFile},
+    {CTRL, INPUTCODE_S, Save},
+    {CTRL | SHIFT, INPUTCODE_S, SaveAs},
     {CTRL, INPUTCODE_MINUS, ZoomOut},
     {CTRL, INPUTCODE_EQUALS, ZoomIn}
 };
@@ -1453,6 +1441,7 @@ void Draw(float dt)
                 //NOTE: This i < 2 check may get bad in the future
                 if (i < 2 || !InputHeld(input.leftShift))
                 {
+                    OnTextChanged();
                     ClearHighlights();
                 }
             }
@@ -1546,6 +1535,10 @@ void Draw(float dt)
                 if (KeyCommandDown(commandBindings[i]))
                 {
                     commandBindings[i].callback();
+
+                    //TODO: Find a better way than this stupid if check
+                    if (i < 5) OnTextChanged();
+
                     break;
                 }
             }
@@ -1556,9 +1549,7 @@ void Draw(float dt)
     if (editor.highlightStart == editor.cursorPos)
         ClearHighlights();
 
-    if (numMultiClicks)
-        doubleClick.elapsedTime += dt;
-    
+    doubleClick.elapsedTime += dt * (numMultiClicks);
     if (doubleClick.elapsedTime >= doubleClick.interval)
     {
         numMultiClicks = 0;
@@ -1570,37 +1561,30 @@ void Draw(float dt)
     DrawRect(screenDims, userSettings.backgroundColour);
     
     //Get correct position for cursor
-    const IntPair start = 
-    {
-        36 + MAX_LINE_NUM_DIGITS * (int)fontData.chars['0'].advance, 
-        screenBuffer.height - (int)fontData.maxHeight - 5
-    }; 
-    IntPair cursorDrawPos = start;
+    IntPair cursorDrawPos = TEXT_START;
     for (int i = 0; i < editor.cursorPos.textAt; ++i)
         cursorDrawPos.x += fontData.chars[editor.lines[editor.cursorPos.line][i]].advance;
     cursorDrawPos.y -= editor.cursorPos.line * (int)(fontData.maxHeight + fontData.lineGap);
-    cursorDrawPos.y -= fontData.offsetBelowBaseline; 
+    cursorDrawPos.y -= fontData.offsetBelowBaseline;
 
     //All this shit here seems very dodgy, maybe refactor or just find a better method
-    int xRightLimit = screenBuffer.width - 10;
-    if (cursorDrawPos.x >= xRightLimit)
-        editor.textOffset.x = max(editor.textOffset.x, cursorDrawPos.x - xRightLimit);
+    if (cursorDrawPos.x >= TEXT_LIMITS.right)
+        editor.textOffset.x = max(editor.textOffset.x, cursorDrawPos.x - TEXT_LIMITS.right);
     else
         editor.textOffset.x = 0;
 
     char cursorChar = editor.lines[editor.cursorPos.line][editor.cursorPos.textAt];
-    int xLeftLimit = start.x + editor.textOffset.x;
+    int xLeftLimit = TEXT_START.x + editor.textOffset.x;
     if (cursorDrawPos.x < xLeftLimit)
         editor.textOffset.x -= fontData.chars[cursorChar].advance;
 	cursorDrawPos.x -= editor.textOffset.x;
 
-    int yBottomLimit = (int)(fontData.maxHeight + fontData.lineGap);
-    if (cursorDrawPos.y < yBottomLimit)
-        editor.textOffset.y = max(editor.textOffset.y, yBottomLimit - cursorDrawPos.y);
+    if (cursorDrawPos.y < TEXT_LIMITS.bottom)
+        editor.textOffset.y = max(editor.textOffset.y, TEXT_LIMITS.bottom - cursorDrawPos.y);
     else
         editor.textOffset.y = 0;
         
-    int yTopLimit = start.y - editor.textOffset.y;
+    int yTopLimit = TEXT_START.y - editor.textOffset.y;
     if (cursorDrawPos.y > yTopLimit)
         editor.textOffset.y -= (int)(fontData.maxHeight + fontData.lineGap);
     cursorDrawPos.y += editor.textOffset.y;
@@ -1615,99 +1599,28 @@ void Draw(float dt)
     };
     DrawRect(lineBackgroundDims, userSettings.lineBackgroundColour);
 
-    Rect textBounds = {start.x, xRightLimit, yBottomLimit, 0};
-
     //Draw all of the text on screen
     int numLinesOnScreen = screenBuffer.height / (int)(fontData.maxHeight + fontData.lineGap);
     int firstLine = abs(editor.textOffset.y) / (int)(fontData.maxHeight + fontData.lineGap);
-    if (IsTokenisable(editor.fileName.toStr()))
+    for (int i = firstLine; i < editor.numLines && i < firstLine + numLinesOnScreen; ++i)
     {
-        //Draw first number always just in case there's no text at all
-	    DrawText(lstring("1"),
-	    	     start.x - fontData.chars['1'].advance - LINE_NUM_OFFSET,
-	    	     start.y + editor.textOffset.y,
-	    	     userSettings.lineNumColour,
-	    	     {0, 0, yBottomLimit, screenBuffer.height});
+        //Draw text
+        int x = TEXT_START.x - editor.textOffset.x;
+        int y = TEXT_START.y - i * (int)(fontData.maxHeight + fontData.lineGap) + editor.textOffset.y;
+        DrawText(editor.lines[i].toStr(), x, y, userSettings.defaultTextColour, TEXT_LIMITS);
 
-        int x = 0;
-        int numLinesTokenised = 0; 
-        int t = tokenInfo.lineSkipIndicies[firstLine];
-        while (numLinesTokenised < numLinesOnScreen && t < tokenInfo.numTokens)
-        {
-            Token token = tokenInfo.tokens[t];
-
-			bool prevTokenOnSameLine = t > 0 && tokenInfo.tokens[t - 1].at.line == token.at.line;
-			bool nextTokenOnSameLine = t < tokenInfo.numTokens - 1 && 
-                                       tokenInfo.tokens[t + 1].at.line == token.at.line;
-
-            if (t == 0 || !prevTokenOnSameLine)
-                x = start.x - editor.textOffset.x;
-            int y = start.y - token.at.line * (int)(fontData.maxHeight + fontData.lineGap) 
-                    + editor.textOffset.y;
-
-            //Draw whitespace at front of line
-			if (!prevTokenOnSameLine)
-            {
-                //Draw Line num
-                char lineNumText[MAX_LINE_NUM_DIGITS + 1]; //TODO: Calculate how many lines we want max cause fucking ey this will likely go to shit
-                IntToString(token.at.line + 1, lineNumText);
-                DrawText(cstring(lineNumText), 
-                         start.x - TextPixelLength(cstring(lineNumText)) - LINE_NUM_OFFSET, 
-                         y, 
-                         userSettings.lineNumColour, 
-                         {0, 0, yBottomLimit, screenBuffer.height});
-
-                if (token.text.str) //TODO: Investigate whether this check is really necessary
-                {
-                    int whitespaceLen = (int)(token.text.str - editor.lines[token.at.line].str);
-				    x += TextPixelLength(editor.lines[token.at.line].str, whitespaceLen);
-                }
-            }
-
-            //Cleanup once editor lines are string buffers
-            string text = token.text;
-
-            //Draw token
-            DrawText(text, x, y, token.colour, textBounds);
-            x += TextPixelLength(text);
-
-            //Draw whitespace
-            if (t < tokenInfo.numTokens - 1 && token.text.len > 0 && nextTokenOnSameLine)
-            {
-                text.str += token.text.len;
-                int remainderLength = (int)(tokenInfo.tokens[t + 1].text.str - token.text.str) 
-                                      - token.text.len;
-                text.len = remainderLength;
-                DrawText(text, x, y, token.colour, textBounds);
-                x += TextPixelLength(text);
-            }
-
-            t++;
-			numLinesTokenised += !nextTokenOnSameLine;
-        }
-    }
-    else
-    {
-        for (int i = firstLine; i < editor.numLines && i < firstLine + numLinesOnScreen; ++i)
-        {
-            //Draw text
-            int x = start.x - editor.textOffset.x;
-            int y = start.y - i * (int)(fontData.maxHeight + fontData.lineGap) + editor.textOffset.y;
-            DrawText(editor.lines[i].toStr(), x, y, userSettings.defaultTextColour, textBounds);
-
-            //Draw Line num
-            char lineNumText[8];
-            IntToString(i + 1, lineNumText);
-            DrawText(cstring(lineNumText), 
-                     start.x - TextPixelLength(cstring(lineNumText)) - LINE_NUM_OFFSET, 
-                     y, 
-                     userSettings.lineNumColour, 
-                     {0, 0, yBottomLimit, 0});
-        }
+        //Draw Line num
+        char lineNumText[8];
+        IntToString(i + 1, lineNumText);
+        DrawText(cstring(lineNumText), 
+                    TEXT_START.x - TextPixelLength(cstring(lineNumText)) - LINE_NUM_OFFSET, 
+                    y, 
+                    userSettings.lineNumColour, 
+                    {0, 0, TEXT_LIMITS.bottom, 0});
     }
     
 
-    //Draw highlighted text
+    //Draw highlights
     if (editor.highlightStart.textAt != -1) 
     {
         Assert(editor.highlightStart.line != -1);
@@ -1720,14 +1633,14 @@ void Draw(float dt)
             TextPixelLength(topHighlightText, highlightInfo.topLen);
 		int topXOffset = 
             TextPixelLength(editor.lines[highlightInfo.top.line].str, highlightInfo.top.textAt);
-        int topX = start.x + topXOffset - editor.textOffset.x;
-        int topY = start.y - highlightInfo.top.line * (int)(fontData.maxHeight + fontData.lineGap) 
+        int topX = TEXT_START.x + topXOffset - editor.textOffset.x;
+        int topY = TEXT_START.y - highlightInfo.top.line * (int)(fontData.maxHeight + fontData.lineGap) 
                    - PIXELS_UNDER_BASELINE + editor.textOffset.y;
         if (editor.lines[highlightInfo.top.line].len == 0) topXOffset = fontData.chars[' '].advance;
         DrawAlphaRect(
             {topX, topX + topHighlightPixelLength, topY, topY + (int)(fontData.maxHeight + fontData.lineGap)},
             userSettings.highlightColour, 
-            textBounds
+            TEXT_LIMITS
         );
 
         //Draw inbetween highlights
@@ -1735,13 +1648,13 @@ void Draw(float dt)
         {
             int highlightedPixelLength = TextPixelLength(editor.lines[i].toStr()); 
             if (editor.lines[i].len == 0) highlightedPixelLength = fontData.chars[' '].advance;
-            int x = start.x - editor.textOffset.x;
-            int y = start.y - i * (int)(fontData.maxHeight + fontData.lineGap) 
+            int x = TEXT_START.x - editor.textOffset.x;
+            int y = TEXT_START.y - i * (int)(fontData.maxHeight + fontData.lineGap) 
                     - PIXELS_UNDER_BASELINE + editor.textOffset.y;
             DrawAlphaRect(
                 {x, x + highlightedPixelLength, y, y + (int)(fontData.maxHeight + fontData.lineGap)}, 
                 userSettings.highlightColour, 
-                textBounds
+                TEXT_LIMITS
             );
         }
 
@@ -1751,8 +1664,8 @@ void Draw(float dt)
             int bottomHighlightPixelLength = 
                 TextPixelLength(editor.lines[highlightInfo.bottom.line].str, 
                                 highlightInfo.bottom.textAt);
-            int bottomX = start.x - editor.textOffset.x;
-            int bottomY = start.y - highlightInfo.bottom.line * (int)(fontData.maxHeight + fontData.lineGap) 
+            int bottomX = TEXT_START.x - editor.textOffset.x;
+            int bottomY = TEXT_START.y - highlightInfo.bottom.line * (int)(fontData.maxHeight + fontData.lineGap) 
                           - PIXELS_UNDER_BASELINE + editor.textOffset.y;
             if (editor.lines[highlightInfo.bottom.line].len == 0) 
                 bottomHighlightPixelLength = fontData.chars[' '].advance;
@@ -1762,7 +1675,7 @@ void Draw(float dt)
                     bottomY, bottomY + (int)(fontData.maxHeight + fontData.lineGap)
                 }, 
                 userSettings.highlightColour, 
-                textBounds
+                TEXT_LIMITS
             );
         }
         
@@ -1787,5 +1700,6 @@ void Draw(float dt)
                            cursorDrawPos.y, cursorDrawPos.y + (int)(fontData.maxHeight + fontData.lineGap)};
         DrawRect(cursorDims, userSettings.cursorColour);
     }
-    
+
+    HighlightSyntax();
 }

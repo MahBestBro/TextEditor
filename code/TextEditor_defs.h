@@ -36,6 +36,20 @@
 #define MAX_UNDOS 256
 #define LINE_CHUNK_SIZE 128
 
+#define TEXT_START IntPair  \
+{   \
+    36 + MAX_LINE_NUM_DIGITS * (int)fontData.chars['0'].advance,    \
+    screenBuffer.height - (int)fontData.maxHeight - 5   \
+}   \
+
+#define TEXT_LIMITS Rect    \
+{   \
+    TEXT_START.x,   \
+    screenBuffer.width - 10,    \
+    (int)(fontData.maxHeight + fontData.lineGap),   \
+    screenBuffer.height - 1 \
+}   \
+
 typedef uint8_t byte;
 typedef uint8_t uchar;
 

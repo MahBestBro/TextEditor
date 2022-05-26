@@ -25,11 +25,13 @@ LIST OF COMMANDS TO IMPLEMENT:
 PROGRAMMING/REFACTORING:
     - Refactor Undo System, especially the string stuff
     - Idea for syntax highlighting customisation
-        - have tokenisers be something user compiles (give demo one though)
-        - have bindings for strings and chars to colours 
+        - have this mainly be coded and compiled by user and give helper functions 
+          (create demo one though) 
     - Consider removing editor moving side effects from functions?
     - Have a function that can map a callback function to an input
         - Pass in inputcode and function pointer which'll be mapped to input.
         - Add optional repeat option which adds timed event.
+        - Have multiple callbacks be allowed to be bound to an input
+    - Separate adding a single character and "paired" characters (e.g., (), {}, "", etc.)
     - Refactor timed events, make them neater and more flexibe if possible?
     

@@ -141,4 +141,11 @@ string GetClipboardText();
 
 string ShowFileDialogAndGetFileName(bool save);
 
+void DrawText(string text, int xCoord, int yCoord, Colour colour, Rect limits = {0});
+
+void OnTextChanged(); //TODO: Expand this to something like an array of function pointers
+void OnFileOpen();
+
+void HighlightSyntax(); //TODO: Rename to like Draw and then rename other Draw function to Update or something
+
 #endif
