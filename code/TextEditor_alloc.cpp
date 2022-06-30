@@ -6,7 +6,7 @@
 StringArena temporaryStringArena;
 StringArena undoStringArena;
 
-internal LineMemoryArena lineMemory;
+LineMemoryArena lineMemory;
 
 internal inline byte* StringArena_PrevBlock(void* block)
 {

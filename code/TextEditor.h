@@ -8,8 +8,6 @@
 #ifndef TEXT_EDITOR_H
 #define TEXT_EDITOR_H
 
-typedef void (*KeyCallback)(void);
-
 struct ScreenBuffer
 {
     void* memory;
@@ -108,6 +106,19 @@ struct Editor
     IntPair textOffset = {};
 };
 
+typedef void (*EditorFunc)(Editor*);
+typedef void (*VoidFunc)(void);
+
+struct KeyCallback
+{
+    bool isEditorFunc;
+    union
+    {
+        EditorFunc editorFunc;
+        VoidFunc voidFunc;
+    };
+};
+
 void Init();
 void Draw(float dt);
 void Print(const char* message);
@@ -146,6 +157,6 @@ void DrawText(string text, int xCoord, int yCoord, Colour colour, Rect limits = 
 void OnTextChanged(); //TODO: Expand this to something like an array of function pointers
 void OnFileOpen();
 
-void HighlightSyntax(); //TODO: Rename to like Draw and then rename other Draw function to Update or something
+void HighlightSyntax(Editor* editor); //TODO: Rename to like Draw and then rename other Draw function to Update or something
 
 #endif

@@ -21,8 +21,8 @@ struct Font
     uint32 offsetBelowBaseline;
 };
 
-global_variable const uint32 fontSizes[] = {8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72};
-global_variable Font fontData;
+global const uint32 fontSizes[] = {8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72};
+global Font fontData;
 
 inline int PointsToPix(int points)
 {

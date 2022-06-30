@@ -34,7 +34,7 @@ struct LineView
     string text;
 };
 
-extern Editor editor;
+//extern Editor editor;
 extern TokenInfo tokenInfo; //TODO: Make this internal
 
 internal TokenColours tokenColours;
@@ -173,9 +173,9 @@ inline bool TypedefExists(Token token)
     return DefinitionExists(true, token);
 }
 
-void AddTypeNameForTypedef(EditorPos at)
+void AddTypeNameForTypedef(Editor* editor, EditorPos at)
 {
-    string_buf currentLine = editor.lines[at.line];
+    string_buf currentLine = editor->lines[at.line];
 
     //Skip over first word
     while (at.textAt < currentLine.len && !IsWhiteSpace(currentLine[at.textAt]))
@@ -188,8 +188,8 @@ void AddTypeNameForTypedef(EditorPos at)
         if (at.textAt == currentLine.len)
         {
 			at.line++;
-            if (at.line == editor.numLines) break;
-			currentLine = editor.lines[at.line];
+            if (at.line == editor->numLines) break;
+			currentLine = editor->lines[at.line];
             at.textAt = 0;
         }
 
@@ -204,7 +204,7 @@ void AddTypeNameForTypedef(EditorPos at)
     }
 
     //Get all text behind semicolon on line and add it as a type
-    if (at.line < editor.numLines)
+    if (at.line < editor->numLines)
     {
         int typeStart = at.textAt;
         while (typeStart < currentLine.len && !IsWhiteSpace(currentLine[typeStart])) 
@@ -270,8 +270,11 @@ string preprocessorTags[] =
     lstring("#pragma")
 };
 
-Token GetTokenFromLine(string_buf code, int lineIndex, int* lineAt, MultilineState* ms)
+//TODO: Make this just get next token or something cause now I realise I need to pass in editor and doing it by line is meaningless now
+Token GetTokenFromLine(Editor* editor, int lineIndex, int* lineAt, MultilineState* ms)
 {
+    string_buf code = editor->lines[lineIndex];
+
     if (code.len == 0) return {EditorPos{0, lineIndex}, string{0}, TOKEN_UNKNOWN};
 
 	int at = *lineAt;
@@ -490,7 +493,7 @@ Token GetTokenFromLine(string_buf code, int lineIndex, int* lineAt, MultilineSta
                     token.type = TOKEN_KEYWORD;
 
                     if (token.text == lstring("typedef"))
-                        AddTypeNameForTypedef({at, lineIndex});
+                        AddTypeNameForTypedef(editor, {at, lineIndex});
                 }
                 else if (code[at] == '(')
                 {
@@ -580,9 +583,11 @@ bool IsTokenisable(string fileName)
 
 void Tokenise()
 {
-    if (!IsTokenisable(editor.fileName.toStr())) return; 
+    Editor* currentEditor = &editors[currentEditorIndex];
 
-    Assert(editor.numLines < MAX_LINES);
+    if (!IsTokenisable(currentEditor->fileName.toStr())) return; 
+
+    Assert(currentEditor->numLines < MAX_LINES);
 
     numTypedefs = 0;
     numPoundDefines = 0;
@@ -590,7 +595,7 @@ void Tokenise()
 
     int tokenIndex = 0;
     MultilineState multilineState = MS_NON_MULTILINE;
-    for (int i = 0; i < editor.numLines; ++i)
+    for (int i = 0; i < currentEditor->numLines; ++i)
     {
 		int lineAt = 0;
         bool parsingLine = true;
@@ -599,7 +604,7 @@ void Tokenise()
 
         while (parsingLine)
         {
-            Token token = GetTokenFromLine(editor.lines[i], i, &lineAt, &multilineState);
+            Token token = GetTokenFromLine(currentEditor, i, &lineAt, &multilineState);
 
             tokenInfo.tokens[tokenInfo.numTokens++] = token;
             if (tokenInfo.numTokens >= tokenInfo.size)
@@ -609,7 +614,7 @@ void Tokenise()
                 tokenInfo.lineSkipIndicies = HeapRealloc(int, tokenInfo.lineSkipIndicies, tokenInfo.size);
             }
             
-            parsingLine = (lineAt < editor.lines[i].len);
+            parsingLine = (lineAt < currentEditor->lines[i].len);
             tokenIndex++;
         }
     }
@@ -625,12 +630,13 @@ void OnTextChanged()
     Tokenise();
 }
 
-void HighlightSyntax()
+//TODO: Put this in api function
+void HighlightSyntax(Editor* editor)
 {
-    if (!IsTokenisable(editor.fileName.toStr())) return; 
+    if (!IsTokenisable(editor->fileName.toStr())) return; 
 
     int numLinesOnScreen = screenBuffer.height / (int)(fontData.maxHeight + fontData.lineGap);
-    int firstLine = abs(editor.textOffset.y) / (int)(fontData.maxHeight + fontData.lineGap);
+    int firstLine = abs(editor->textOffset.y) / (int)(fontData.maxHeight + fontData.lineGap);
 
     int x = 0;
     int numLinesTokenised = 0; 
@@ -644,21 +650,20 @@ void HighlightSyntax()
                                     tokenInfo.tokens[t + 1].at.line == token.at.line;
 
         if (t == 0 || !prevTokenOnSameLine)
-            x = TEXT_START.x - editor.textOffset.x;
+            x = TEXT_START.x - editor->textOffset.x;
         int y = TEXT_START.y - token.at.line * (int)(fontData.maxHeight + fontData.lineGap) 
-                + editor.textOffset.y;
+                + editor->textOffset.y;
 
         //Draw whitespace at front of line
         if (!prevTokenOnSameLine)
         {
             if (token.text.str) //TODO: Investigate whether this check is really necessary
             {
-                int whitespaceLen = (int)(token.text.str - editor.lines[token.at.line].str);
-                x += TextPixelLength(editor.lines[token.at.line].str, whitespaceLen);
+                int whitespaceLen = (int)(token.text.str - editor->lines[token.at.line].str);
+                x += TextPixelLength(editor->lines[token.at.line].str, whitespaceLen);
             }
         }
 
-        //Cleanup once editor lines are string buffers
         string text = token.text;
         Colour textColour = tokenColours.colours[token.type];
 

@@ -5,7 +5,7 @@
 
 #define internal static
 #define local_persist static 
-#define global_variable static
+#define global static
 
 #define __Out
 

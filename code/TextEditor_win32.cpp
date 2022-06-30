@@ -25,9 +25,9 @@
 DEF_STRING_ARENA_FUNCS(temporaryStringArena);
 DEF_STRING_ARENA_FUNCS(undoStringArena);
 
-global_variable Input input = {};
-global_variable ScreenBuffer screenBuffer;
-global_variable UserSettings userSettings;
+global Input input = {};
+global ScreenBuffer screenBuffer;
+global UserSettings userSettings;
 
 #include "TextEditor_input.cpp"
 #include "TextEditor.cpp"
@@ -38,8 +38,8 @@ global_variable UserSettings userSettings;
 #include "TextEditor_tokeniser.cpp"
 
 
-internal BITMAPINFO bitmapInfo;
-internal bool running;
+BITMAPINFO bitmapInfo;
+bool running;
 
 inline uint32 SafeTruncateSize32(uint64 val)
 {
