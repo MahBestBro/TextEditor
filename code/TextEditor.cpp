@@ -274,6 +274,7 @@ void DrawText(string text, int xCoord, int yCoord, Colour colour, Rect limits)
 //
 
 global Editor editors[3];
+global int numEditors = 1;
 global int currentEditorIndex = 0;
 //Editor editor;
 
@@ -826,7 +827,7 @@ Token GetTokenAtCursor(EditorPos cursorPos)
 }
 
 //
-//KEY-MAPPED FUNCTIONS
+//KEY-MAPPED EDITOR FUNCTIONS
 //
 
 void AddChar(Editor* editor)
@@ -1232,40 +1233,6 @@ void CutHighlightedText(Editor* editor)
     ClearHighlights(editor);
 }
 
-//TODO: Resize editor.lines if file too big + maybe return success bool?
-void OpenFile(Editor* editor)
-{
-    //Allocating twice on heap here, don't think it should be massive performance hit but kinda sketchy
-    string fileName = ShowFileDialogAndGetFileName(false);
-    string file = ReadEntireFileAsString(fileName);
-    if (file.str)
-    {
-        editor->fileName = fileName;
-
-        char* startOfFile = file.str;
-
-        editor->numLines = 0;
-        string line = GetNextLine(&file);
-        while(line[0])
-        {
-            editor->lines[editor->numLines] = line;
-            editor->numLines++;
-
-            line = GetNextLine(&file);
-        }
-
-        FreeWin32(startOfFile);
-
-        ResetUndoStack(editor);
-        ResetUndoStack(editor, true);
-
-        editor->topChangedLineIndex = -1;
-        editor->cursorPos = {0, 0};
-
-        OnFileOpen();
-    }
-}
-
 void SaveAs(Editor* editor)
 {
 	string fileName = ShowFileDialogAndGetFileName(true);
@@ -1299,6 +1266,10 @@ void Redo(Editor* editor)
     HandleUndoInfo(editor, redoInfo, true);
 }
 
+//
+//KEY-MAPPED VOID FUNCTIONS
+//
+
 void ZoomIn()
 {
     fontData.sizeIndex = min(fontData.sizeIndex + 1, StackArrayLen(fontSizes) - 1); 
@@ -1309,6 +1280,63 @@ void ZoomOut()
 {
     fontData.sizeIndex = max(fontData.sizeIndex - 1, 0); 
     ResizeFont(fontData.sizeIndex - 1);
+}
+
+//TODO: Resize editor.lines if file too big + maybe return success bool?
+void TE_OpenFile()
+{
+    if (numEditors == 3) return;
+
+    //Allocating twice on heap here, don't think it should be massive performance hit but kinda sketchy
+    string fileName = ShowFileDialogAndGetFileName(false);
+    string file = ReadEntireFileAsString(fileName);
+    if (file.str)
+    {
+        currentEditorIndex = numEditors; 
+        numEditors++;
+
+        for (int i = 0; i < MAX_LINES; ++i)
+            editors[currentEditorIndex].lines[i] = init_string_buf(LINE_CHUNK_SIZE, lineMemoryAllocator);
+        editors[currentEditorIndex].fileName = init_string_buf("");
+
+        editors[currentEditorIndex].fileName = fileName;
+
+        char* startOfFile = file.str;
+
+        editors[currentEditorIndex].numLines = 0;
+        string line = GetNextLine(&file);
+        while(line[0])
+        {
+            editors[currentEditorIndex].lines[editors[currentEditorIndex].numLines] = line;
+            editors[currentEditorIndex].numLines++;
+
+            line = GetNextLine(&file);
+        }
+
+        FreeWin32(startOfFile);
+
+        ResetUndoStack(&editors[currentEditorIndex]);
+        ResetUndoStack(&editors[currentEditorIndex], true);
+
+        editors[currentEditorIndex].topChangedLineIndex = -1;
+        editors[currentEditorIndex].cursorPos = {0, 0};
+
+        OnFileOpen();
+    }
+}
+
+void SelectNextEditor()
+{
+    currentEditorIndex = (currentEditorIndex + 1) % numEditors;
+
+    OnEditorSwitch();
+}
+
+void SelectPrevEditor()
+{
+    currentEditorIndex = (currentEditorIndex > 0) ? (currentEditorIndex - 1) % numEditors : numEditors - 1;
+
+    OnEditorSwitch();
 }
 
 //
@@ -1357,12 +1385,14 @@ KeyBinding commandBindings[] =
     {CTRL, INPUTCODE_A, {true, HighlightEntireFile}},
     {CTRL, INPUTCODE_C, {true, CopyHighlightedText}},
     {CTRL, INPUTCODE_L, {true, HighlightCurrentLine}},
-    {CTRL, INPUTCODE_O, {true, OpenFile}},
     {CTRL, INPUTCODE_S, {true, Save}},
     {CTRL | SHIFT, INPUTCODE_S, {true, SaveAs}},
 
     //Non-editor bindings
     //idk why I have to cast the function pointers, frikkin c++
+    {CTRL, INPUTCODE_O, {false, (EditorFunc)TE_OpenFile}},
+    {ALT,  INPUTCODE_RIGHT, {false, (EditorFunc)SelectNextEditor}},
+    {ALT,  INPUTCODE_LEFT,  {false, (EditorFunc)SelectPrevEditor}},
     {CTRL, INPUTCODE_MINUS,  {false, (EditorFunc)ZoomOut}},
     {CTRL, INPUTCODE_EQUALS, {false, (EditorFunc)ZoomIn}}
 };

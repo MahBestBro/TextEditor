@@ -156,6 +156,7 @@ void DrawText(string text, int xCoord, int yCoord, Colour colour, Rect limits = 
 
 void OnTextChanged(); //TODO: Expand this to something like an array of function pointers
 void OnFileOpen();
+void OnEditorSwitch();
 
 void HighlightSyntax(Editor* editor); //TODO: Rename to like Draw and then rename other Draw function to Update or something
 

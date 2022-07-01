@@ -237,8 +237,8 @@ string ShowFileDialogAndGetFileName(bool save)
     // Initialize OPENFILENAME
     ofn.lStructSize = sizeof(ofn);
     ofn.lpstrFile = chosenFileName;
-    ofn.nMaxFile = sizeof(chosenFileName);
-    ofn.lpstrFilter = L"All\0*.*\0Text\0*.TXT\0";
+    ofn.nMaxFile = sizeof(chosenFileName) / sizeof(wchar);
+    ofn.lpstrFilter = L"All\0*.*\0Text\0*.TXT\0\0";
     ofn.nFilterIndex = 1;
     ofn.lpstrFileTitle = NULL;
     ofn.nMaxFileTitle = 0;

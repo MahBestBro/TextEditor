@@ -630,6 +630,11 @@ void OnTextChanged()
     Tokenise();
 }
 
+void OnEditorSwitch()
+{
+    Tokenise();
+}
+
 //TODO: Put this in api function
 void HighlightSyntax(Editor* editor)
 {
