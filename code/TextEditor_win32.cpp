@@ -23,7 +23,7 @@
 #include "TextEditor_alloc.cpp"
 
 DEF_STRING_ARENA_FUNCS(temporaryStringArena);
-DEF_STRING_ARENA_FUNCS(undoStringArena);
+//DEF_STRING_ARENA_FUNCS(undoStringArena);
 
 global Input input = {};
 global ScreenBuffer screenBuffer;

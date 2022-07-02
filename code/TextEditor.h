@@ -98,6 +98,7 @@ struct Editor
     //Where the cursor was when user started highlighting
     EditorPos highlightStart = {-1, -1};
 
+    StringArena undoStringArena;
     UndoInfo undoStack[MAX_UNDOS];
     int numUndos = 0;
     UndoInfo redoStack[MAX_UNDOS];

@@ -492,6 +492,20 @@ TextSectionInfo GetTextSectionInfo(string_buf* lines, EditorPos start, EditorPos
     return result;
 }
 
+inline void* UndoArenas_Alloc(size_t size)
+{  
+    return StringArena_Alloc(&editors[currentEditorIndex].undoStringArena, size);
+} 
+inline void* UndoArenas_Realloc(void* block, size_t size)
+{ 
+    return StringArena_Realloc(&editors[currentEditorIndex].undoStringArena, block, size);
+} 
+inline void UndoArenas_Free(void* block)
+{
+    return StringArena_Free(&editors[currentEditorIndex].undoStringArena, block);
+}
+const Allocator undoArenasAllocator = {UndoArenas_Alloc, UndoArenas_Realloc, UndoArenas_Free};
+
 void AddToUndoStack(Editor* editor, EditorPos undoStart, EditorPos undoEnd, UndoType type, bool redo = false, bool fillBuffer = true)
 {
     UndoInfo undo;
@@ -504,11 +518,11 @@ void AddToUndoStack(Editor* editor, EditorPos undoStart, EditorPos undoEnd, Undo
         TextSectionInfo section = GetTextSectionInfo(editor->lines, undoStart, undoEnd);
 		if (fillBuffer)
 		{
-			undo.text = GetMultilineText(editor, section, allocator_undoStringArena);
+			undo.text = GetMultilineText(editor, section, undoArenasAllocator);
 		}
         else
         {
-            undo.text = init_string_buf(128, allocator_undoStringArena);
+            undo.text = init_string_buf(128, undoArenasAllocator);
         }
     }
     else if (type == UNDOTYPE_REMOVED_TEXT_REVERSE_BUFFER)
@@ -636,7 +650,7 @@ void HandleUndoInfo(Editor* editor, UndoInfo undoInfo, bool isRedo)
         case UNDOTYPE_ADDED_TEXT:
         {
             stack[*numInStack - 1].type = UNDOTYPE_REMOVED_TEXT_SECTION;
-            stack[*numInStack - 1].text = GetMultilineText(editor, sectionInfo, allocator_undoStringArena);
+            stack[*numInStack - 1].text = GetMultilineText(editor, sectionInfo, undoArenasAllocator);
             RemoveTextSection(editor, sectionInfo);
         } break;
 
@@ -863,7 +877,7 @@ void AddChar(Editor* editor)
         TextSectionInfo highlightInfo = 
             GetTextSectionInfo(editor->lines, editor->highlightStart, editor->cursorPos);
         editor->undoStack[editor->numUndos - 1].type = UNDOTYPE_OVERWRITE;
-        editor->undoStack[editor->numUndos - 1].text = GetMultilineText(editor, highlightInfo, allocator_undoStringArena);
+        editor->undoStack[editor->numUndos - 1].text = GetMultilineText(editor, highlightInfo, undoArenasAllocator);
         
 		RemoveTextSection(editor, highlightInfo);
         editor->undoStack[editor->numUndos - 1].start = editor->cursorPos;
@@ -983,7 +997,7 @@ void Backspace(Editor* editor)
         TextSectionInfo highlightInfo = GetTextSectionInfo(editor->lines, 
                                                            editor->highlightStart, 
                                                            editor->cursorPos);
-        editor->undoStack[editor->numUndos - 1].text = GetMultilineText(editor, highlightInfo, allocator_undoStringArena);
+        editor->undoStack[editor->numUndos - 1].text = GetMultilineText(editor, highlightInfo, undoArenasAllocator);
         ResetUndoStack(editor, true);
         
         RemoveTextSection(editor, highlightInfo);
@@ -1077,7 +1091,7 @@ void Enter(Editor* editor)
                                                            editor->highlightStart, 
                                                            editor->cursorPos);
         editor->undoStack[editor->numUndos - 1].type = UNDOTYPE_OVERWRITE;
-        editor->undoStack[editor->numUndos - 1].text = GetMultilineText(editor, highlightInfo, allocator_undoStringArena);
+        editor->undoStack[editor->numUndos - 1].text = GetMultilineText(editor, highlightInfo, undoArenasAllocator);
         //editor->undoStack[editor->numUndos - 1].numLines = 
         //    highlightInfo.bottom.line - highlightInfo.top.line;
 
@@ -1203,7 +1217,7 @@ void Paste(Editor* editor)
 
 			editor->undoStack[editor->numUndos - 1].start = highlightInfo.top;
             editor->undoStack[editor->numUndos - 1].type = UNDOTYPE_OVERWRITE;
-            editor->undoStack[editor->numUndos - 1].text = GetMultilineText(editor, highlightInfo, allocator_undoStringArena);
+            editor->undoStack[editor->numUndos - 1].text = GetMultilineText(editor, highlightInfo, undoArenasAllocator);
             
             RemoveTextSection(editor, highlightInfo);
             ClearHighlights(editor);
@@ -1224,7 +1238,7 @@ void CutHighlightedText(Editor* editor)
     TextSectionInfo highlightInfo = GetTextSectionInfo(editor->lines, 
                                                        editor->highlightStart, 
                                                        editor->cursorPos);
-    editor->undoStack[editor->numUndos - 1].text = GetMultilineText(editor, highlightInfo, allocator_undoStringArena);
+    editor->undoStack[editor->numUndos - 1].text = GetMultilineText(editor, highlightInfo, undoArenasAllocator);
     ResetUndoStack(editor, true);
 
     RemoveTextSection(editor, GetTextSectionInfo(editor->lines, 
