@@ -35,7 +35,7 @@ struct LineView
 };
 
 //extern Editor editor;
-extern TokenInfo tokenInfo; //TODO: Make this internal
+//extern TokenInfo tokenInfo; //TODO: Make this internal
 
 internal TokenColours tokenColours;
 
@@ -581,40 +581,41 @@ bool IsTokenisable(string fileName)
     return false;
 }
 
-void Tokenise()
+void Tokenise(int editorIndex)
 {
-    Editor* currentEditor = &editors[currentEditorIndex];
+    Editor* editor = &editors[editorIndex];
+    if (!IsTokenisable(editor->fileName.toStr())) return; 
 
-    if (!IsTokenisable(currentEditor->fileName.toStr())) return; 
+    TokenInfo* tokenInfo = &tokenInfos[editorIndex];
 
-    Assert(currentEditor->numLines < MAX_LINES);
+    Assert(editor->numLines < MAX_LINES);
 
     numTypedefs = 0;
     numPoundDefines = 0;
-    tokenInfo.numTokens = 0;
+    tokenInfo->numTokens = 0;
 
     int tokenIndex = 0;
     MultilineState multilineState = MS_NON_MULTILINE;
-    for (int i = 0; i < currentEditor->numLines; ++i)
+    for (int i = 0; i < editor->numLines; ++i)
     {
 		int lineAt = 0;
         bool parsingLine = true;
 
-        tokenInfo.lineSkipIndicies[i] = tokenIndex;
+        tokenInfo->lineSkipIndicies[i] = tokenIndex;
 
         while (parsingLine)
         {
-            Token token = GetTokenFromLine(currentEditor, i, &lineAt, &multilineState);
+            Token token = GetTokenFromLine(editor, i, &lineAt, &multilineState);
 
-            tokenInfo.tokens[tokenInfo.numTokens++] = token;
-            if (tokenInfo.numTokens >= tokenInfo.size)
+            tokenInfo->tokens[tokenInfo->numTokens++] = token;
+            if (tokenInfo->numTokens >= tokenInfo->size)
             {
-                tokenInfo.size *= 2;
-                tokenInfo.tokens = HeapRealloc(Token, tokenInfo.tokens, tokenInfo.size);
-                tokenInfo.lineSkipIndicies = HeapRealloc(int, tokenInfo.lineSkipIndicies, tokenInfo.size);
+                tokenInfo->size *= 2;
+                tokenInfo->tokens = HeapRealloc(Token, tokenInfo->tokens, tokenInfo->size);
+                tokenInfo->lineSkipIndicies = HeapRealloc(int, tokenInfo->lineSkipIndicies, tokenInfo->size);
             }
             
-            parsingLine = (lineAt < currentEditor->lines[i].len);
+            parsingLine = (lineAt < editor->lines[i].len);
             tokenIndex++;
         }
     }
@@ -622,26 +623,43 @@ void Tokenise()
 
 void OnFileOpen()
 {
-    Tokenise();
+    Tokenise(numEditors - 1);
 }
 
 void OnTextChanged()
 {
-    Tokenise();
+    Tokenise(currentEditorIndex);
 }
 
 void OnEditorSwitch()
 {
-    Tokenise();
+    Tokenise(currentEditorIndex);
 }
 
 //TODO: Put this in api function
-void HighlightSyntax(Editor* editor)
+void HighlightSyntax(int editorIndex)
 {
+    Editor* editor = &editors[editorIndex];
     if (!IsTokenisable(editor->fileName.toStr())) return; 
 
     int numLinesOnScreen = screenBuffer.height / (int)(fontData.maxHeight + fontData.lineGap);
     int firstLine = abs(editor->textOffset.y) / (int)(fontData.maxHeight + fontData.lineGap);
+
+    TokenInfo tokenInfo = tokenInfos[editorIndex];
+
+    bool onRightHalf = editorIndex == openEditorIndexes[1];
+    const IntPair textStart = 
+    {
+        36 + MAX_LINE_NUM_DIGITS * (int)fontData.chars['0'].advance + (onRightHalf) * screenBuffer.width / 2,
+        screenBuffer.height - (int)fontData.maxHeight - 5
+    };
+    const Rect textLimits =
+    {
+        textStart.x,
+        screenBuffer.width / (2 - (!onRightHalf)) - 10,
+        (int)(fontData.maxHeight + fontData.lineGap),
+        screenBuffer.height - 1
+    };
 
     int x = 0;
     int numLinesTokenised = 0; 
@@ -655,8 +673,8 @@ void HighlightSyntax(Editor* editor)
                                     tokenInfo.tokens[t + 1].at.line == token.at.line;
 
         if (t == 0 || !prevTokenOnSameLine)
-            x = TEXT_START.x - editor->textOffset.x;
-        int y = TEXT_START.y - token.at.line * (int)(fontData.maxHeight + fontData.lineGap) 
+            x = textStart.x - editor->textOffset.x;
+        int y = textStart.y - token.at.line * (int)(fontData.maxHeight + fontData.lineGap) 
                 + editor->textOffset.y;
 
         //Draw whitespace at front of line

@@ -276,9 +276,33 @@ void DrawText(string text, int xCoord, int yCoord, Colour colour, Rect limits)
 global Editor editors[3];
 global int numEditors = 1;
 global int currentEditorIndex = 0;
+global int openEditorIndexes[] = {0, 1};
 //Editor editor;
 
-internal TokenInfo tokenInfo;
+global TokenInfo tokenInfos[3];
+
+
+IntPair GetEditorTextStart(int editorIndex)
+{
+    bool rightSide = editorIndex == openEditorIndexes[1];
+    return IntPair 
+    {
+        36 + MAX_LINE_NUM_DIGITS * (int)fontData.chars['0'].advance + (rightSide) * screenBuffer.width / 2,
+        screenBuffer.height - (int)fontData.maxHeight - 5
+    };
+}
+
+Rect GetEditorTextLimits(int editorIndex)
+{
+    bool rightSide = editorIndex == openEditorIndexes[1];
+    return Rect
+    {
+        GetEditorTextStart(editorIndex).x,
+        screenBuffer.width / (2 - (rightSide)) - 10,
+        (int)(fontData.maxHeight + fontData.lineGap),
+        screenBuffer.height - 1
+    };
+}
 
 void InitHighlight(Editor* editor, int initialTextIndex, int initialLineIndex)
 {
@@ -494,15 +518,15 @@ TextSectionInfo GetTextSectionInfo(string_buf* lines, EditorPos start, EditorPos
 
 inline void* UndoArenas_Alloc(size_t size)
 {  
-    return StringArena_Alloc(&editors[currentEditorIndex].undoStringArena, size);
+    return StringArena_Alloc(&editors[openEditorIndexes[currentEditorIndex]].undoStringArena, size);
 } 
 inline void* UndoArenas_Realloc(void* block, size_t size)
 { 
-    return StringArena_Realloc(&editors[currentEditorIndex].undoStringArena, block, size);
+    return StringArena_Realloc(&editors[openEditorIndexes[currentEditorIndex]].undoStringArena, block, size);
 } 
 inline void UndoArenas_Free(void* block)
 {
-    return StringArena_Free(&editors[currentEditorIndex].undoStringArena, block);
+    return StringArena_Free(&editors[openEditorIndexes[currentEditorIndex]].undoStringArena, block);
 }
 const Allocator undoArenasAllocator = {UndoArenas_Alloc, UndoArenas_Realloc, UndoArenas_Free};
 
@@ -780,8 +804,15 @@ void HandleUndoInfo(Editor* editor, UndoInfo undoInfo, bool isRedo)
     editor->cursorPos = undoInfo.prevCursorPos;
 }
 
-EditorPos GetEditorPosAtMouse(Editor* editor)
+inline int GetEditorIndexAtMouse()
 {
+    return openEditorIndexes[input.mousePixelPos.x > screenBuffer.width / 2 && numEditors > 1]; 
+}
+
+EditorPos GetEditorPosAtMouse()
+{
+    Editor* editor = &editors[GetEditorIndexAtMouse()];
+
     EditorPos result;
     int mouseLine = (screenBuffer.height - input.mousePixelPos.y) / (fontData.maxHeight + fontData.lineGap);
     result.line = min(mouseLine, editor->numLines - 1);
@@ -823,9 +854,9 @@ void HighlightWordAt(Editor* editor, EditorPos pos)
 
 Token GetTokenAtCursor(EditorPos cursorPos)
 {
-    for (int i = 0; i < tokenInfo.numTokens; ++i)
+    for (int i = 0; i < tokenInfos[openEditorIndexes[currentEditorIndex]].numTokens; ++i)
     {
-        Token token = tokenInfo.tokens[i]; 
+        Token token = tokenInfos[openEditorIndexes[currentEditorIndex]].tokens[i]; 
 
         if (token.at.line > cursorPos.line) break;
 
@@ -833,7 +864,7 @@ Token GetTokenAtCursor(EditorPos cursorPos)
         {
             int tokenEnd = token.at.textAt + token.text.len;
             if (InRange(cursorPos.textAt, token.at.textAt, tokenEnd))
-                return tokenInfo.tokens[i];
+                return tokenInfos[openEditorIndexes[currentEditorIndex]].tokens[i];
         }
     }
 
@@ -1306,7 +1337,8 @@ void TE_OpenFile()
     string file = ReadEntireFileAsString(fileName);
     if (file.str)
     {
-        currentEditorIndex = numEditors; 
+        openEditorIndexes[(numEditors == 1)] = numEditors;
+        currentEditorIndex = openEditorIndexes[(numEditors == 1)];
         numEditors++;
 
         for (int i = 0; i < MAX_LINES; ++i)
@@ -1341,14 +1373,18 @@ void TE_OpenFile()
 
 void SelectNextEditor()
 {
-    currentEditorIndex = (currentEditorIndex + 1) % numEditors;
+    int i = currentEditorIndex == openEditorIndexes[1];  
+    openEditorIndexes[i] = (openEditorIndexes[i] + 1) % numEditors; 
+    currentEditorIndex = openEditorIndexes[i];
 
     OnEditorSwitch();
 }
 
 void SelectPrevEditor()
 {
-    currentEditorIndex = (currentEditorIndex > 0) ? (currentEditorIndex - 1) % numEditors : numEditors - 1;
+    int i = currentEditorIndex == openEditorIndexes[1]; 
+    openEditorIndexes[i] = (openEditorIndexes[i] > 0) ? openEditorIndexes[i] - 1 : numEditors - 1;
+    currentEditorIndex = openEditorIndexes[i];
 
     OnEditorSwitch();
 }
@@ -1420,7 +1456,8 @@ void Init()
     
     LoadTokenColours();
 
-    tokenInfo = InitTokenInfo();
+    for (int i = 0; i < 3; ++i)
+        tokenInfos[i] = InitTokenInfo();
 }
 
 void Draw(float dt)
@@ -1559,7 +1596,7 @@ void Draw(float dt)
         if (InputDown(input.leftMouse))
         {
             ClearHighlights(currentEditor);
-            currentEditor->cursorPos = GetEditorPosAtMouse(currentEditor);
+            editors[GetEditorIndexAtMouse()].cursorPos = GetEditorPosAtMouse();
     
             if (numMultiClicks > 0 && prevMousePos == currentEditor->cursorPos)
             {
@@ -1585,15 +1622,18 @@ void Draw(float dt)
                 doubleClicked = true;
                 doubleClick.elapsedTime = 0.0f;
             }
-            prevMousePos = GetEditorPosAtMouse(currentEditor); //I don't think this is 100% correct but it works
+            prevMousePos = GetEditorPosAtMouse(); //I don't think this is 100% correct but it works
             numMultiClicks += doubleClick.elapsedTime <= doubleClick.interval;
+
+            currentEditorIndex = GetEditorIndexAtMouse();
+            currentEditor = &editors[currentEditorIndex];
         }
 
         //TODO: Maybe make mouse drag highlight extend from multi click? 
         if (InputHeld(input.leftMouse))
         {
             InitHighlight(currentEditor, currentEditor->cursorPos.textAt, currentEditor->cursorPos.line);
-            if (!doubleClicked) currentEditor->cursorPos = GetEditorPosAtMouse(currentEditor);
+            if (!doubleClicked) currentEditor->cursorPos = GetEditorPosAtMouse();
         }
 
         if (InputUp(input.leftMouse))
@@ -1634,66 +1674,83 @@ void Draw(float dt)
     //Draw Background
     Rect screenDims = {0, screenBuffer.width, 0, screenBuffer.height};
     DrawRect(screenDims, userSettings.backgroundColour);
+
+    IntPair currentCursorDrawPos = {};
     
-    //Get correct position for cursor
-    IntPair cursorDrawPos = TEXT_START;
-    for (int i = 0; i < currentEditor->cursorPos.textAt; ++i)
-        cursorDrawPos.x += fontData.chars[currentEditor->lines[currentEditor->cursorPos.line][i]].advance;
-    cursorDrawPos.y -= currentEditor->cursorPos.line * (int)(fontData.maxHeight + fontData.lineGap);
-    cursorDrawPos.y -= fontData.offsetBelowBaseline;
-
-    //All this shit here seems very dodgy, maybe refactor or just find a better method
-    if (cursorDrawPos.x >= TEXT_LIMITS.right)
-        currentEditor->textOffset.x = max(currentEditor->textOffset.x, cursorDrawPos.x - TEXT_LIMITS.right);
-    else
-        currentEditor->textOffset.x = 0;
-
-    char cursorChar = currentEditor->lines[currentEditor->cursorPos.line][currentEditor->cursorPos.textAt];
-    int xLeftLimit = TEXT_START.x + currentEditor->textOffset.x;
-    if (cursorDrawPos.x < xLeftLimit)
-        currentEditor->textOffset.x -= fontData.chars[cursorChar].advance;
-	cursorDrawPos.x -= currentEditor->textOffset.x;
-
-    if (cursorDrawPos.y < TEXT_LIMITS.bottom)
-        currentEditor->textOffset.y = max(currentEditor->textOffset.y, TEXT_LIMITS.bottom - cursorDrawPos.y);
-    else
-        currentEditor->textOffset.y = 0;
+    for (int e = 0; e < min(2, numEditors); ++e)
+    {
+        Editor* editor = &editors[openEditorIndexes[e]]; 
         
-    int yTopLimit = TEXT_START.y - currentEditor->textOffset.y;
-    if (cursorDrawPos.y > yTopLimit)
-        currentEditor->textOffset.y -= (int)(fontData.maxHeight + fontData.lineGap);
-    cursorDrawPos.y += currentEditor->textOffset.y;
+        const IntPair textStart = GetEditorTextStart(openEditorIndexes[e]);
+        const Rect textLimits = GetEditorTextLimits(openEditorIndexes[e]);
 
-    //Draw Line Background
-    Rect lineBackgroundDims = 
-    {
-        0, 
-        screenBuffer.width, 
-        cursorDrawPos.y, 
-        cursorDrawPos.y + (int)(fontData.maxHeight + fontData.lineGap)
-    };
-    DrawRect(lineBackgroundDims, userSettings.lineBackgroundColour);
+        //Get correct position for cursor
+        IntPair cursorDrawPos = textStart;
+        for (int i = 0; i < editor->cursorPos.textAt; ++i)
+            cursorDrawPos.x += fontData.chars[editor->lines[editor->cursorPos.line][i]].advance;
+        cursorDrawPos.y -= editor->cursorPos.line * (int)(fontData.maxHeight + fontData.lineGap);
+        cursorDrawPos.y -= fontData.offsetBelowBaseline;
 
-    //Draw all of the text on screen
-    int numLinesOnScreen = screenBuffer.height / (int)(fontData.maxHeight + fontData.lineGap);
-    int firstLine = abs(currentEditor->textOffset.y) / (int)(fontData.maxHeight + fontData.lineGap);
-    for (int i = firstLine; i < currentEditor->numLines && i < firstLine + numLinesOnScreen; ++i)
-    {
-        //Draw text
-        int x = TEXT_START.x - currentEditor->textOffset.x;
-        int y = TEXT_START.y - i * (int)(fontData.maxHeight + fontData.lineGap) + currentEditor->textOffset.y;
-        DrawText(currentEditor->lines[i].toStr(), x, y, userSettings.defaultTextColour, TEXT_LIMITS);
+        //All this shit here seems very dodgy, maybe refactor or just find a better method
+        if (cursorDrawPos.x >= textLimits.right)
+            editor->textOffset.x = max(editor->textOffset.x, cursorDrawPos.x - textLimits.right);
+        else
+            editor->textOffset.x = 0;
 
-        //Draw Line num
-        char lineNumText[8];
-        IntToString(i + 1, lineNumText);
-        DrawText(cstring(lineNumText), 
-                    TEXT_START.x - TextPixelLength(cstring(lineNumText)) - LINE_NUM_OFFSET, 
-                    y, 
-                    userSettings.lineNumColour, 
-                    {0, 0, TEXT_LIMITS.bottom, 0});
+        char cursorChar = editor->lines[editor->cursorPos.line][editor->cursorPos.textAt];
+        int xLeftLimit = textStart.x + editor->textOffset.x;
+        if (cursorDrawPos.x < xLeftLimit)
+            editor->textOffset.x -= fontData.chars[cursorChar].advance;
+	    cursorDrawPos.x -= editor->textOffset.x;
+
+        if (cursorDrawPos.y < textLimits.bottom)
+            editor->textOffset.y = max(editor->textOffset.y, textLimits.bottom - cursorDrawPos.y);
+        else
+            editor->textOffset.y = 0;
+
+        int yTopLimit = textStart.y - editor->textOffset.y;
+        if (cursorDrawPos.y > yTopLimit)
+            editor->textOffset.y -= (int)(fontData.maxHeight + fontData.lineGap);
+        cursorDrawPos.y += editor->textOffset.y;
+
+        if (currentEditorIndex == openEditorIndexes[e])
+        {
+            currentCursorDrawPos = cursorDrawPos;
+
+            //Draw Line Background
+            Rect lineBackgroundDims = 
+            {
+                textLimits.left, 
+                textLimits.right, 
+                cursorDrawPos.y, 
+                cursorDrawPos.y + (int)(fontData.maxHeight + fontData.lineGap)
+            };
+            DrawRect(lineBackgroundDims, userSettings.lineBackgroundColour);
+        }
+
+        //Draw all of the text on screen
+        int numLinesOnScreen = screenBuffer.height / (int)(fontData.maxHeight + fontData.lineGap);
+        int firstLine = abs(editor->textOffset.y) / (int)(fontData.maxHeight + fontData.lineGap);
+        for (int i = firstLine; i < editor->numLines && i < firstLine + numLinesOnScreen; ++i)
+        {
+            //Draw text
+            int x = textStart.x - editor->textOffset.x;
+            int y = textStart.y - i * (int)(fontData.maxHeight + fontData.lineGap) + editor->textOffset.y;
+            DrawText(editor->lines[i].toStr(), x, y, userSettings.defaultTextColour, textLimits);
+
+            //Draw Line num
+            char lineNumText[8];
+            IntToString(i + 1, lineNumText);
+            DrawText(cstring(lineNumText), 
+                     textStart.x - TextPixelLength(cstring(lineNumText)) - LINE_NUM_OFFSET, 
+                     y, 
+                     userSettings.lineNumColour, 
+                     {0, 0, textLimits.bottom, 0});
+        }
     }
     
+    const IntPair textStart = GetEditorTextStart(currentEditorIndex);
+    const Rect textLimits = GetEditorTextLimits(currentEditorIndex);
 
     //Draw highlights
     if (currentEditor->highlightStart.textAt != -1) 
@@ -1708,14 +1765,14 @@ void Draw(float dt)
             TextPixelLength(topHighlightText, highlightInfo.topLen);
 		int topXOffset = 
             TextPixelLength(currentEditor->lines[highlightInfo.top.line].str, highlightInfo.top.textAt);
-        int topX = TEXT_START.x + topXOffset - currentEditor->textOffset.x;
-        int topY = TEXT_START.y - highlightInfo.top.line * (int)(fontData.maxHeight + fontData.lineGap) 
+        int topX = textStart.x + topXOffset - currentEditor->textOffset.x;
+        int topY = textStart.y - highlightInfo.top.line * (int)(fontData.maxHeight + fontData.lineGap) 
                    - PIXELS_UNDER_BASELINE + currentEditor->textOffset.y;
         if (currentEditor->lines[highlightInfo.top.line].len == 0) topXOffset = fontData.chars[' '].advance;
         DrawAlphaRect(
             {topX, topX + topHighlightPixelLength, topY, topY + (int)(fontData.maxHeight + fontData.lineGap)},
             userSettings.highlightColour, 
-            TEXT_LIMITS
+            textLimits
         );
 
         //Draw inbetween highlights
@@ -1723,13 +1780,13 @@ void Draw(float dt)
         {
             int highlightedPixelLength = TextPixelLength(currentEditor->lines[i].toStr()); 
             if (currentEditor->lines[i].len == 0) highlightedPixelLength = fontData.chars[' '].advance;
-            int x = TEXT_START.x - currentEditor->textOffset.x;
-            int y = TEXT_START.y - i * (int)(fontData.maxHeight + fontData.lineGap) 
+            int x = textStart.x - currentEditor->textOffset.x;
+            int y = textStart.y - i * (int)(fontData.maxHeight + fontData.lineGap) 
                     - PIXELS_UNDER_BASELINE + currentEditor->textOffset.y;
             DrawAlphaRect(
                 {x, x + highlightedPixelLength, y, y + (int)(fontData.maxHeight + fontData.lineGap)}, 
                 userSettings.highlightColour, 
-                TEXT_LIMITS
+                textLimits
             );
         }
 
@@ -1739,8 +1796,8 @@ void Draw(float dt)
             int bottomHighlightPixelLength = 
                 TextPixelLength(currentEditor->lines[highlightInfo.bottom.line].str, 
                                 highlightInfo.bottom.textAt);
-            int bottomX = TEXT_START.x - currentEditor->textOffset.x;
-            int bottomY = TEXT_START.y - highlightInfo.bottom.line * (int)(fontData.maxHeight + fontData.lineGap) 
+            int bottomX = textStart.x - currentEditor->textOffset.x;
+            int bottomY = textStart.y - highlightInfo.bottom.line * (int)(fontData.maxHeight + fontData.lineGap) 
                           - PIXELS_UNDER_BASELINE + currentEditor->textOffset.y;
             if (currentEditor->lines[highlightInfo.bottom.line].len == 0) 
                 bottomHighlightPixelLength = fontData.chars[' '].advance;
@@ -1750,7 +1807,7 @@ void Draw(float dt)
                     bottomY, bottomY + (int)(fontData.maxHeight + fontData.lineGap)
                 }, 
                 userSettings.highlightColour, 
-                TEXT_LIMITS
+                textLimits
             );
         }
         
@@ -1771,10 +1828,11 @@ void Draw(float dt)
         if (cursorMoving) cursorBlink.elapsedTime = 0.0f;
         //Draw Cursor
 
-        Rect cursorDims = {cursorDrawPos.x, cursorDrawPos.x + 2, //TODO: Make width scale with font size
-                           cursorDrawPos.y, cursorDrawPos.y + (int)(fontData.maxHeight + fontData.lineGap)};
+        Rect cursorDims = {currentCursorDrawPos.x, currentCursorDrawPos.x + 2, //TODO: Make width scale with font size
+                           currentCursorDrawPos.y, currentCursorDrawPos.y + (int)(fontData.maxHeight + fontData.lineGap)};
         DrawRect(cursorDims, userSettings.cursorColour);
     }
 
-    HighlightSyntax(currentEditor);
+    HighlightSyntax(openEditorIndexes[0]);
+    HighlightSyntax(openEditorIndexes[1]);
 }

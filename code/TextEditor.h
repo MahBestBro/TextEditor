@@ -159,6 +159,6 @@ void OnTextChanged(); //TODO: Expand this to something like an array of function
 void OnFileOpen();
 void OnEditorSwitch();
 
-void HighlightSyntax(Editor* editor); //TODO: Rename to like Draw and then rename other Draw function to Update or something
+void HighlightSyntax(int editorIndex); //TODO: Rename to like Draw and then rename other Draw function to Update or something
 
 #endif
