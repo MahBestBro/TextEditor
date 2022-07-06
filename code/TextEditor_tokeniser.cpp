@@ -583,6 +583,8 @@ bool IsTokenisable(string fileName)
 
 void Tokenise(int editorIndex)
 {
+    if (numEditors > 3) return;
+
     Editor* editor = &editors[editorIndex];
     if (!IsTokenisable(editor->fileName.toStr())) return; 
 
@@ -628,84 +630,77 @@ void OnFileOpen()
 
 void OnTextChanged()
 {
-    Tokenise(currentEditorIndex);
+    Tokenise(openEditorIndexes[currentEditorSide]);
 }
 
 void OnEditorSwitch()
 {
-    Tokenise(currentEditorIndex);
+    Tokenise(openEditorIndexes[currentEditorSide]);
 }
 
 //TODO: Put this in api function
-void HighlightSyntax(int editorIndex)
+void HighlightSyntax()
 {
-    Editor* editor = &editors[editorIndex];
-    if (!IsTokenisable(editor->fileName.toStr())) return; 
-
-    int numLinesOnScreen = screenBuffer.height / (int)(fontData.maxHeight + fontData.lineGap);
-    int firstLine = abs(editor->textOffset.y) / (int)(fontData.maxHeight + fontData.lineGap);
-
-    TokenInfo tokenInfo = tokenInfos[editorIndex];
-
-    bool onRightHalf = editorIndex == openEditorIndexes[1];
-    const IntPair textStart = 
+    for (int e = 0; e < 2; ++e)
     {
-        36 + MAX_LINE_NUM_DIGITS * (int)fontData.chars['0'].advance + (onRightHalf) * screenBuffer.width / 2,
-        screenBuffer.height - (int)fontData.maxHeight - 5
-    };
-    const Rect textLimits =
-    {
-        textStart.x,
-        screenBuffer.width / (2 - (!onRightHalf)) - 10,
-        (int)(fontData.maxHeight + fontData.lineGap),
-        screenBuffer.height - 1
-    };
+        Editor* editor = &editors[openEditorIndexes[e]];
+        if (!IsTokenisable(editor->fileName.toStr())) continue; 
 
-    int x = 0;
-    int numLinesTokenised = 0; 
-    int t = tokenInfo.lineSkipIndicies[firstLine];
-    while (numLinesTokenised < numLinesOnScreen && t < tokenInfo.numTokens)
-    {
-        Token token = tokenInfo.tokens[t];
+        int numLinesOnScreen = screenBuffer.height / (int)(fontData.maxHeight + fontData.lineGap);
+        int firstLine = abs(editor->textOffset.y) / (int)(fontData.maxHeight + fontData.lineGap);
 
-        bool prevTokenOnSameLine = t > 0 && tokenInfo.tokens[t - 1].at.line == token.at.line;
-        bool nextTokenOnSameLine = t < tokenInfo.numTokens - 1 && 
-                                    tokenInfo.tokens[t + 1].at.line == token.at.line;
+        TokenInfo tokenInfo = tokenInfos[openEditorIndexes[e]];
 
-        if (t == 0 || !prevTokenOnSameLine)
-            x = textStart.x - editor->textOffset.x;
-        int y = textStart.y - token.at.line * (int)(fontData.maxHeight + fontData.lineGap) 
-                + editor->textOffset.y;
+        const IntPair textStart = (e == 0) ? GetLeftTextStart() : GetRightTextStart();
+        const Rect textLimits = (e == 0) ? GetLeftTextLimits() : GetRightTextLimits();
 
-        //Draw whitespace at front of line
-        if (!prevTokenOnSameLine)
+        int x = 0;
+        int numLinesTokenised = 0; 
+        int t = tokenInfo.lineSkipIndicies[firstLine];
+        while (numLinesTokenised < numLinesOnScreen && t < tokenInfo.numTokens)
         {
-            if (token.text.str) //TODO: Investigate whether this check is really necessary
+            Token token = tokenInfo.tokens[t];
+
+            bool prevTokenOnSameLine = t > 0 && tokenInfo.tokens[t - 1].at.line == token.at.line;
+            bool nextTokenOnSameLine = t < tokenInfo.numTokens - 1 && 
+                                        tokenInfo.tokens[t + 1].at.line == token.at.line;
+
+            if (t == 0 || !prevTokenOnSameLine)
+                x = textStart.x - editor->textOffset.x;
+            int y = textStart.y - token.at.line * (int)(fontData.maxHeight + fontData.lineGap) 
+                    + editor->textOffset.y;
+
+            //Draw whitespace at front of line
+            if (!prevTokenOnSameLine)
             {
-                int whitespaceLen = (int)(token.text.str - editor->lines[token.at.line].str);
-                x += TextPixelLength(editor->lines[token.at.line].str, whitespaceLen);
+                if (token.text.str) //TODO: Investigate whether this check is really necessary
+                {
+                    int whitespaceLen = (int)(token.text.str - editor->lines[token.at.line].str);
+                    x += TextPixelLength(editor->lines[token.at.line].str, whitespaceLen);
+                }
             }
-        }
 
-        string text = token.text;
-        Colour textColour = tokenColours.colours[token.type];
+            string text = token.text;
+            Colour textColour = tokenColours.colours[token.type];
 
-        //Draw token
-        DrawText(text, x, y, textColour, TEXT_LIMITS);
-        x += TextPixelLength(text);
-
-        //Draw whitespace
-        if (t < tokenInfo.numTokens - 1 && token.text.len > 0 && nextTokenOnSameLine)
-        {
-            text.str += token.text.len;
-            int remainderLength = (int)(tokenInfo.tokens[t + 1].text.str - token.text.str) 
-                                    - token.text.len;
-            text.len = remainderLength;
-            DrawText(text, x, y, textColour, TEXT_LIMITS);
+            //Draw token
+            DrawText(text, x, y, textColour, textLimits);
             x += TextPixelLength(text);
-        }
 
-        t++;
-        numLinesTokenised += !nextTokenOnSameLine;
+            //Draw whitespace
+            if (t < tokenInfo.numTokens - 1 && token.text.len > 0 && nextTokenOnSameLine)
+            {
+                text.str += token.text.len;
+                int remainderLength = (int)(tokenInfo.tokens[t + 1].text.str - token.text.str) 
+                                        - token.text.len;
+                text.len = remainderLength;
+                DrawText(text, x, y, textColour, textLimits);
+                x += TextPixelLength(text);
+            }
+
+            t++;
+            numLinesTokenised += !nextTokenOnSameLine;
+        }
     }
+
 }

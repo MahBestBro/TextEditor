@@ -275,33 +275,58 @@ void DrawText(string text, int xCoord, int yCoord, Colour colour, Rect limits)
 
 global Editor editors[3];
 global int numEditors = 1;
-global int currentEditorIndex = 0;
+global int currentEditorSide = 0;
 global int openEditorIndexes[] = {0, 1};
 //Editor editor;
 
 global TokenInfo tokenInfos[3];
 
-
-IntPair GetEditorTextStart(int editorIndex)
+IntPair GetLeftTextStart()
 {
-    bool rightSide = editorIndex == openEditorIndexes[1];
     return IntPair 
     {
-        36 + MAX_LINE_NUM_DIGITS * (int)fontData.chars['0'].advance + (rightSide) * screenBuffer.width / 2,
+        36 + MAX_LINE_NUM_DIGITS * (int)fontData.chars['0'].advance,
         screenBuffer.height - (int)fontData.maxHeight - 5
     };
 }
 
-Rect GetEditorTextLimits(int editorIndex)
+IntPair GetRightTextStart()
 {
-    bool rightSide = editorIndex == openEditorIndexes[1];
+    IntPair result = GetLeftTextStart();
+    result.x += screenBuffer.width / 2;
+    return result;
+}
+
+inline IntPair GetCurrentEditorTextStart()
+{
+    return (currentEditorSide) ? GetLeftTextStart() : GetLeftTextStart();
+}
+
+Rect GetLeftTextLimits()
+{
     return Rect
     {
-        GetEditorTextStart(editorIndex).x,
-        screenBuffer.width / (2 - (rightSide)) - 10,
+        36 + MAX_LINE_NUM_DIGITS * (int)fontData.chars['0'].advance,
+        screenBuffer.width / 2 - 10,
         (int)(fontData.maxHeight + fontData.lineGap),
         screenBuffer.height - 1
     };
+}
+
+Rect GetRightTextLimits()
+{
+    return Rect
+    {
+        36 + MAX_LINE_NUM_DIGITS * (int)fontData.chars['0'].advance + screenBuffer.width / 2,
+        screenBuffer.width - 10,
+        (int)(fontData.maxHeight + fontData.lineGap),
+        screenBuffer.height - 1
+    };
+}
+
+inline Rect GetCurrentEditorTextLimits()
+{
+    return (currentEditorSide) ? GetLeftTextLimits() : GetRightTextLimits();
 }
 
 void InitHighlight(Editor* editor, int initialTextIndex, int initialLineIndex)
@@ -518,15 +543,15 @@ TextSectionInfo GetTextSectionInfo(string_buf* lines, EditorPos start, EditorPos
 
 inline void* UndoArenas_Alloc(size_t size)
 {  
-    return StringArena_Alloc(&editors[openEditorIndexes[currentEditorIndex]].undoStringArena, size);
+    return StringArena_Alloc(&editors[openEditorIndexes[currentEditorSide]].undoStringArena, size);
 } 
 inline void* UndoArenas_Realloc(void* block, size_t size)
 { 
-    return StringArena_Realloc(&editors[openEditorIndexes[currentEditorIndex]].undoStringArena, block, size);
+    return StringArena_Realloc(&editors[openEditorIndexes[currentEditorSide]].undoStringArena, block, size);
 } 
 inline void UndoArenas_Free(void* block)
 {
-    return StringArena_Free(&editors[openEditorIndexes[currentEditorIndex]].undoStringArena, block);
+    return StringArena_Free(&editors[openEditorIndexes[currentEditorSide]].undoStringArena, block);
 }
 const Allocator undoArenasAllocator = {UndoArenas_Alloc, UndoArenas_Realloc, UndoArenas_Free};
 
@@ -804,14 +829,14 @@ void HandleUndoInfo(Editor* editor, UndoInfo undoInfo, bool isRedo)
     editor->cursorPos = undoInfo.prevCursorPos;
 }
 
-inline int GetEditorIndexAtMouse()
+inline bool MouseOnLeftSide()
 {
-    return openEditorIndexes[input.mousePixelPos.x > screenBuffer.width / 2 && numEditors > 1]; 
+    return input.mousePixelPos.x < screenBuffer.width / 2; 
 }
 
 EditorPos GetEditorPosAtMouse()
 {
-    Editor* editor = &editors[GetEditorIndexAtMouse()];
+    Editor* editor = &editors[openEditorIndexes[!MouseOnLeftSide()]];
 
     EditorPos result;
     int mouseLine = (screenBuffer.height - input.mousePixelPos.y) / (fontData.maxHeight + fontData.lineGap);
@@ -854,9 +879,9 @@ void HighlightWordAt(Editor* editor, EditorPos pos)
 
 Token GetTokenAtCursor(EditorPos cursorPos)
 {
-    for (int i = 0; i < tokenInfos[openEditorIndexes[currentEditorIndex]].numTokens; ++i)
+    for (int i = 0; i < tokenInfos[openEditorIndexes[currentEditorSide]].numTokens; ++i)
     {
-        Token token = tokenInfos[openEditorIndexes[currentEditorIndex]].tokens[i]; 
+        Token token = tokenInfos[openEditorIndexes[currentEditorSide]].tokens[i]; 
 
         if (token.at.line > cursorPos.line) break;
 
@@ -864,7 +889,7 @@ Token GetTokenAtCursor(EditorPos cursorPos)
         {
             int tokenEnd = token.at.textAt + token.text.len;
             if (InRange(cursorPos.textAt, token.at.textAt, tokenEnd))
-                return tokenInfos[openEditorIndexes[currentEditorIndex]].tokens[i];
+                return tokenInfos[openEditorIndexes[currentEditorSide]].tokens[i];
         }
     }
 
@@ -1337,9 +1362,11 @@ void TE_OpenFile()
     string file = ReadEntireFileAsString(fileName);
     if (file.str)
     {
-        openEditorIndexes[(numEditors == 1)] = numEditors;
-        currentEditorIndex = openEditorIndexes[(numEditors == 1)];
+        currentEditorSide = numEditors == 1 || currentEditorSide;
+        openEditorIndexes[currentEditorSide] = numEditors;
         numEditors++;
+
+        const int currentEditorIndex = openEditorIndexes[currentEditorSide];
 
         for (int i = 0; i < MAX_LINES; ++i)
             editors[currentEditorIndex].lines[i] = init_string_buf(LINE_CHUNK_SIZE, lineMemoryAllocator);
@@ -1372,19 +1399,16 @@ void TE_OpenFile()
 }
 
 void SelectNextEditor()
-{
-    int i = currentEditorIndex == openEditorIndexes[1];  
-    openEditorIndexes[i] = (openEditorIndexes[i] + 1) % numEditors; 
-    currentEditorIndex = openEditorIndexes[i];
+{  
+    openEditorIndexes[currentEditorSide] = (openEditorIndexes[currentEditorSide] + 1) % numEditors; 
 
     OnEditorSwitch();
 }
 
 void SelectPrevEditor()
-{
-    int i = currentEditorIndex == openEditorIndexes[1]; 
-    openEditorIndexes[i] = (openEditorIndexes[i] > 0) ? openEditorIndexes[i] - 1 : numEditors - 1;
-    currentEditorIndex = openEditorIndexes[i];
+{ 
+    openEditorIndexes[currentEditorSide] = (openEditorIndexes[currentEditorSide] > 0) ? 
+                                             openEditorIndexes[currentEditorSide] - 1 : numEditors - 1;
 
     OnEditorSwitch();
 }
@@ -1462,7 +1486,7 @@ void Init()
 
 void Draw(float dt)
 {
-    Editor* currentEditor = &editors[currentEditorIndex];
+    Editor* currentEditor = &editors[openEditorIndexes[currentEditorSide]];
 
     //Detect key input and handle char input
     //TODO: look into simultaneous input with backpace and char keys
@@ -1596,7 +1620,8 @@ void Draw(float dt)
         if (InputDown(input.leftMouse))
         {
             ClearHighlights(currentEditor);
-            editors[GetEditorIndexAtMouse()].cursorPos = GetEditorPosAtMouse();
+            currentEditorSide = !MouseOnLeftSide();
+            editors[currentEditorSide].cursorPos = GetEditorPosAtMouse();
     
             if (numMultiClicks > 0 && prevMousePos == currentEditor->cursorPos)
             {
@@ -1625,15 +1650,14 @@ void Draw(float dt)
             prevMousePos = GetEditorPosAtMouse(); //I don't think this is 100% correct but it works
             numMultiClicks += doubleClick.elapsedTime <= doubleClick.interval;
 
-            currentEditorIndex = GetEditorIndexAtMouse();
-            currentEditor = &editors[currentEditorIndex];
+            currentEditor = &editors[openEditorIndexes[currentEditorSide]];
         }
 
         //TODO: Maybe make mouse drag highlight extend from multi click? 
         if (InputHeld(input.leftMouse))
         {
             InitHighlight(currentEditor, currentEditor->cursorPos.textAt, currentEditor->cursorPos.line);
-            if (!doubleClicked) currentEditor->cursorPos = GetEditorPosAtMouse();
+            if (!doubleClicked) currentEditor->cursorPos = GetEditorPosAtMouse(); //TODO: I think this has a bug: test
         }
 
         if (InputUp(input.leftMouse))
@@ -1681,8 +1705,8 @@ void Draw(float dt)
     {
         Editor* editor = &editors[openEditorIndexes[e]]; 
         
-        const IntPair textStart = GetEditorTextStart(openEditorIndexes[e]);
-        const Rect textLimits = GetEditorTextLimits(openEditorIndexes[e]);
+        const IntPair textStart = (e == 0) ? GetLeftTextStart() : GetRightTextStart();
+        const Rect textLimits = (e == 0) ? GetLeftTextLimits() : GetRightTextLimits();
 
         //Get correct position for cursor
         IntPair cursorDrawPos = textStart;
@@ -1713,7 +1737,7 @@ void Draw(float dt)
             editor->textOffset.y -= (int)(fontData.maxHeight + fontData.lineGap);
         cursorDrawPos.y += editor->textOffset.y;
 
-        if (currentEditorIndex == openEditorIndexes[e])
+        if (e == currentEditorSide)
         {
             currentCursorDrawPos = cursorDrawPos;
 
@@ -1749,8 +1773,8 @@ void Draw(float dt)
         }
     }
     
-    const IntPair textStart = GetEditorTextStart(currentEditorIndex);
-    const Rect textLimits = GetEditorTextLimits(currentEditorIndex);
+    const IntPair textStart = GetCurrentEditorTextStart();
+    const Rect textLimits = GetCurrentEditorTextLimits();
 
     //Draw highlights
     if (currentEditor->highlightStart.textAt != -1) 
@@ -1833,6 +1857,5 @@ void Draw(float dt)
         DrawRect(cursorDims, userSettings.cursorColour);
     }
 
-    HighlightSyntax(openEditorIndexes[0]);
-    HighlightSyntax(openEditorIndexes[1]);
+    HighlightSyntax();
 }
