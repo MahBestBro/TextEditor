@@ -299,7 +299,7 @@ IntPair GetRightTextStart()
 
 inline IntPair GetCurrentEditorTextStart()
 {
-    return (currentEditorSide) ? GetLeftTextStart() : GetLeftTextStart();
+    return (currentEditorSide) ? GetRightTextStart() : GetLeftTextStart();
 }
 
 Rect GetLeftTextLimits()
@@ -326,7 +326,7 @@ Rect GetRightTextLimits()
 
 inline Rect GetCurrentEditorTextLimits()
 {
-    return (currentEditorSide) ? GetLeftTextLimits() : GetRightTextLimits();
+    return (currentEditorSide) ? GetRightTextLimits() : GetLeftTextLimits();
 }
 
 void InitHighlight(Editor* editor, int initialTextIndex, int initialLineIndex)
@@ -656,6 +656,7 @@ void InsertText(Editor* editor, string multilineText, EditorPos insertAt)
     SetTopChangedLine(editor, insertAt.line);
 }
 
+//TODO: There is still a bug where 2 null characters are being written (my guess we overshooting /r/n): fix
 void SaveFile(Editor* editor, string fileName)
 {
     if (editor->topChangedLineIndex == -1) return; 
@@ -836,13 +837,14 @@ inline bool MouseOnLeftSide()
 
 EditorPos GetEditorPosAtMouse()
 {
-    Editor* editor = &editors[openEditorIndexes[!MouseOnLeftSide()]];
+    Editor* editor = &editors[openEditorIndexes[currentEditorSide]];
 
     EditorPos result;
-    int mouseLine = (screenBuffer.height - input.mousePixelPos.y) / (fontData.maxHeight + fontData.lineGap);
+    int lineY = screenBuffer.height - input.mousePixelPos.y + editor->textOffset.y;
+    int mouseLine = lineY / (fontData.maxHeight + fontData.lineGap);
     result.line = min(mouseLine, editor->numLines - 1);
     
-    int linePixLen = MAX_LINE_NUM_DIGITS * (int)fontData.chars['0'].advance;
+    int linePixLen = GetCurrentEditorTextStart().x;
     result.textAt = 0;
     string_buf line = editor->lines[result.line];
     while (linePixLen < input.mousePixelPos.x && result.textAt < line.len)
@@ -1556,6 +1558,8 @@ void Draw(float dt)
         HandleTimedEvent(&holdChar, dt, &repeatChar, currentEditor);
 
         ClearHighlights(currentEditor);
+
+        OnTextChanged();
     }
     else
     {
@@ -1621,7 +1625,8 @@ void Draw(float dt)
         {
             ClearHighlights(currentEditor);
             currentEditorSide = !MouseOnLeftSide();
-            editors[currentEditorSide].cursorPos = GetEditorPosAtMouse();
+            currentEditor = &editors[openEditorIndexes[currentEditorSide]];
+            currentEditor->cursorPos = GetEditorPosAtMouse();
     
             if (numMultiClicks > 0 && prevMousePos == currentEditor->cursorPos)
             {
@@ -1649,15 +1654,13 @@ void Draw(float dt)
             }
             prevMousePos = GetEditorPosAtMouse(); //I don't think this is 100% correct but it works
             numMultiClicks += doubleClick.elapsedTime <= doubleClick.interval;
-
-            currentEditor = &editors[openEditorIndexes[currentEditorSide]];
         }
 
         //TODO: Maybe make mouse drag highlight extend from multi click? 
         if (InputHeld(input.leftMouse))
         {
             InitHighlight(currentEditor, currentEditor->cursorPos.textAt, currentEditor->cursorPos.line);
-            if (!doubleClicked) currentEditor->cursorPos = GetEditorPosAtMouse(); //TODO: I think this has a bug: test
+            if (!doubleClicked) currentEditor->cursorPos = GetEditorPosAtMouse();
         }
 
         if (InputUp(input.leftMouse))
