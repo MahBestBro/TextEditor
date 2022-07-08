@@ -118,7 +118,7 @@ struct string_buf
     char* cstr();
 };
 
-string_buf init_string_buf(string s, size_t capacity, Allocator allocator = {});
+string_buf init_string_buf(string s, size_t capacity = 0, Allocator allocator = {});
 inline string_buf init_string_buf(char* cstr, size_t capacity = 0, Allocator allocator = {})
 {
     return init_string_buf(cstring(cstr), capacity, allocator);

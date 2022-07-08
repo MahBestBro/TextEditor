@@ -34,18 +34,17 @@ struct LineView
     string text;
 };
 
-//extern Editor editor;
 //extern TokenInfo tokenInfo; //TODO: Make this internal
 
-internal TokenColours tokenColours;
+TokenColours tokenColours;
 
 //DefinedTokenHashSet types = InitHashSet();
-internal LineView typedefs[INITIAL_TYPEDEFS_SIZE];
-internal int numTypedefs = 0;
+LineView typedefs[INITIAL_TYPEDEFS_SIZE];
+int numTypedefs = 0;
 
 //DefinedTokenHashSet defines = InitHashSet();
-internal LineView poundDefines[INITIAL_TYPEDEFS_SIZE];
-internal int numPoundDefines = 0;
+LineView poundDefines[INITIAL_TYPEDEFS_SIZE];
+int numPoundDefines = 0;
 
 void LoadTokenColours()
 {
@@ -636,6 +635,12 @@ void OnTextChanged()
 void OnEditorSwitch()
 {
     Tokenise(openEditorIndexes[currentEditorSide]);
+}
+
+void OnFileSave()
+{
+	if (IsTokenisable(editors[openEditorIndexes[currentEditorSide]].fileName.toStr()))
+        Tokenise(openEditorIndexes[currentEditorSide]);
 }
 
 //TODO: Put this in api function

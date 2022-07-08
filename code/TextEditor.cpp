@@ -450,6 +450,15 @@ void MoveCursorDown(Editor* editor)
     }
 }
 
+Editor InitEditor(string fileName = lstring(""))
+{
+    Editor result;
+    for (int i = 0; i < MAX_LINES; ++i)
+        result.lines[i] = init_string_buf(LINE_CHUNK_SIZE, lineMemoryAllocator);
+    result.fileName = init_string_buf(fileName);
+    return result;
+}
+
 void SetTopChangedLine(Editor* editor, int newLineIndex)
 {
     if (editor->topChangedLineIndex != -1)
@@ -681,6 +690,8 @@ void SaveFile(Editor* editor, string fileName)
     }
 
     editor->topChangedLineIndex = -1;
+
+    OnFileSave();
 }
 
 //TODO: Double check memory leaks
@@ -1357,7 +1368,7 @@ void ZoomOut()
 //TODO: Resize editor.lines if file too big + maybe return success bool?
 void TE_OpenFile()
 {
-    if (numEditors == 3) return;
+    if (numEditors >= 3) return;
 
     //Allocating twice on heap here, don't think it should be massive performance hit but kinda sketchy
     string fileName = ShowFileDialogAndGetFileName(false);
@@ -1369,12 +1380,7 @@ void TE_OpenFile()
         numEditors++;
 
         const int currentEditorIndex = openEditorIndexes[currentEditorSide];
-
-        for (int i = 0; i < MAX_LINES; ++i)
-            editors[currentEditorIndex].lines[i] = init_string_buf(LINE_CHUNK_SIZE, lineMemoryAllocator);
-        editors[currentEditorIndex].fileName = init_string_buf("");
-
-        editors[currentEditorIndex].fileName = fileName;
+        editors[currentEditorIndex] = InitEditor(fileName);
 
         char* startOfFile = file.str;
 
@@ -1398,6 +1404,18 @@ void TE_OpenFile()
 
         OnFileOpen();
     }
+}
+
+void NewEditor()
+{
+    if (numEditors >= 3) return;
+
+    editors[numEditors++] = InitEditor();
+    editors[numEditors - 1].lines[0] = "Type your text here.";
+    editors[numEditors - 1].cursorPos = EditorPos{editors[numEditors - 1].lines[0].len, 0};
+    
+	if (numEditors == 2) currentEditorSide = 1;
+    openEditorIndexes[currentEditorSide] = numEditors - 1; 
 }
 
 void SelectNextEditor()
@@ -1466,6 +1484,7 @@ KeyBinding commandBindings[] =
 
     //Non-editor bindings
     //idk why I have to cast the function pointers, frikkin c++
+    {CTRL, INPUTCODE_N, {false, (EditorFunc)NewEditor}},
     {CTRL, INPUTCODE_O, {false, (EditorFunc)TE_OpenFile}},
     {ALT,  INPUTCODE_RIGHT, {false, (EditorFunc)SelectNextEditor}},
     {ALT,  INPUTCODE_LEFT,  {false, (EditorFunc)SelectPrevEditor}},
@@ -1474,13 +1493,10 @@ KeyBinding commandBindings[] =
 };
 
 void Init()
-{
-    for (int i = 0; i < MAX_LINES; ++i)
-        editors[0].lines[i] = init_string_buf(LINE_CHUNK_SIZE, lineMemoryAllocator);
-    
-    editors[0].fileName = init_string_buf("");
-    
+{   
     LoadTokenColours();
+
+    editors[0] = InitEditor();
 
     for (int i = 0; i < 3; ++i)
         tokenInfos[i] = InitTokenInfo();

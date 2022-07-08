@@ -13,7 +13,6 @@ FEATURES:
 LIST OF COMMANDS TO IMPLEMENT:
     - Ctrl+F: Find
     - Ctrl+J: Jump to Line
-    - Ctrl+N: Creates new text file
     - Ctrl+Q: Close editor
     - Ctrl+T: Opens terminal (unlikely but would be cool)
     -
