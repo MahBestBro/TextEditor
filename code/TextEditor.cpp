@@ -1566,12 +1566,15 @@ void Draw(float dt)
         
     }
     
+    bool cursorMoving = charKeyPressed || InputHeld(input.backspace) || ArrowKeysHeld(input.arrowKeys);
+
     if (charKeyPressed && !nonCharKeyPressed && !InputHeld(input.leftCtrl) && 
         InputHeld(input.flags[CharToInputCode(currentEditor->currentChar)]))
     {
-        if (newCharKeyPressed)
-            holdChar.elapsedTime = 0.0f;
+        if (newCharKeyPressed) holdChar.elapsedTime = 0.0f;
         HandleTimedEvent(&holdChar, dt, &repeatChar, currentEditor);
+
+        cursorMoving = true;
 
         ClearHighlights(currentEditor);
 
@@ -1589,6 +1592,7 @@ void Draw(float dt)
                 repeatAction.onTrigger = nonCharKeyBindings[i].callback;
                 nonCharKeyBindings[i].callback.editorFunc(currentEditor); //TODO: check for both funcs if needed
                 holdAction.elapsedTime = 0.0f;
+                cursorMoving = true;
 
                 //NOTE: This i < 2 check may get bad in the future
                 if (i < 2 || !InputHeld(input.leftShift))
@@ -1600,6 +1604,7 @@ void Draw(float dt)
             else if (InputHeld(input.flags[nonCharKeyBindings[i].mainKey]))
             {
                 inputHeld = true;
+                cursorMoving = true;
             }
         } 
 
@@ -1613,10 +1618,13 @@ void Draw(float dt)
                 //repeatAction.onTrigger.isEditorFunc = true;
                 UnTab(currentEditor);
                 holdAction.elapsedTime = 0.0f;
+
+                cursorMoving = true;
             }
             else if (InputHeld(input.tab))
             {
                 inputHeld = true;
+                cursorMoving = true;
             }   
         }
 
@@ -1718,7 +1726,7 @@ void Draw(float dt)
     Rect screenDims = {0, screenBuffer.width, 0, screenBuffer.height};
     DrawRect(screenDims, userSettings.backgroundColour);
 
-    IntPair currentCursorDrawPos = {};
+    IntPair cursorDrawPos = {};
     
     for (int e = 0; e < min(2, numEditors); ++e)
     {
@@ -1727,38 +1735,41 @@ void Draw(float dt)
         const IntPair textStart = (e == 0) ? GetLeftTextStart() : GetRightTextStart();
         const Rect textLimits = (e == 0) ? GetLeftTextLimits() : GetRightTextLimits();
 
-        //Get correct position for cursor
-        IntPair cursorDrawPos = textStart;
-        for (int i = 0; i < editor->cursorPos.textAt; ++i)
-            cursorDrawPos.x += fontData.chars[editor->lines[editor->cursorPos.line][i]].advance;
-        cursorDrawPos.y -= editor->cursorPos.line * (int)(fontData.maxHeight + fontData.lineGap);
-        cursorDrawPos.y -= fontData.offsetBelowBaseline;
-
-        //All this shit here seems very dodgy, maybe refactor or just find a better method
-        if (cursorDrawPos.x >= textLimits.right)
-            editor->textOffset.x = max(editor->textOffset.x, cursorDrawPos.x - textLimits.right);
-        else
-            editor->textOffset.x = 0;
-
-        char cursorChar = editor->lines[editor->cursorPos.line][editor->cursorPos.textAt];
-        int xLeftLimit = textStart.x + editor->textOffset.x;
-        if (cursorDrawPos.x < xLeftLimit)
-            editor->textOffset.x -= fontData.chars[cursorChar].advance;
-	    cursorDrawPos.x -= editor->textOffset.x;
-
-        if (cursorDrawPos.y < textLimits.bottom)
-            editor->textOffset.y = max(editor->textOffset.y, textLimits.bottom - cursorDrawPos.y);
-        else
-            editor->textOffset.y = 0;
-
-        int yTopLimit = textStart.y - editor->textOffset.y;
-        if (cursorDrawPos.y > yTopLimit)
-            editor->textOffset.y -= (int)(fontData.maxHeight + fontData.lineGap);
-        cursorDrawPos.y += editor->textOffset.y;
-
         if (e == currentEditorSide)
         {
-            currentCursorDrawPos = cursorDrawPos;
+            //Get correct position for cursor
+            cursorDrawPos = textStart;
+            for (int i = 0; i < editor->cursorPos.textAt; ++i)
+                cursorDrawPos.x += fontData.chars[editor->lines[editor->cursorPos.line][i]].advance;
+            cursorDrawPos.y -= editor->cursorPos.line * (int)(fontData.maxHeight + fontData.lineGap);
+            cursorDrawPos.y -= fontData.offsetBelowBaseline;
+
+            //All this shit here seems very dodgy, maybe refactor or just find a better method
+
+            if (cursorMoving)
+            {
+                if (cursorDrawPos.x >= textLimits.right)
+                    editor->textOffset.x = max(editor->textOffset.x, cursorDrawPos.x - textLimits.right);
+                else
+                    editor->textOffset.x = 0;
+
+                char cursorChar = editor->lines[editor->cursorPos.line][editor->cursorPos.textAt];
+                int xLeftLimit = textStart.x + editor->textOffset.x;
+                if (cursorDrawPos.x < xLeftLimit)
+                    editor->textOffset.x -= fontData.chars[cursorChar].advance;
+	            cursorDrawPos.x -= editor->textOffset.x;
+
+                if (cursorDrawPos.y < textLimits.bottom)
+                    editor->textOffset.y = max(editor->textOffset.y, textLimits.bottom - cursorDrawPos.y);
+                else
+                    editor->textOffset.y = 0;
+
+                int yTopLimit = textStart.y - editor->textOffset.y;
+                if (cursorDrawPos.y > yTopLimit)
+                    editor->textOffset.y -= (int)(fontData.maxHeight + fontData.lineGap);
+            }
+
+            cursorDrawPos.y += editor->textOffset.y;
 
             //Draw Line Background
             Rect lineBackgroundDims = 
@@ -1769,6 +1780,12 @@ void Draw(float dt)
                 cursorDrawPos.y + (int)(fontData.maxHeight + fontData.lineGap)
             };
             DrawRect(lineBackgroundDims, userSettings.lineBackgroundColour);
+        }
+
+        if (e == !MouseOnLeftSide())
+        {
+            int delta = (int)(input.scrollWheelDelta * 20.0f);
+            editor->textOffset.y = Clamp(editor->textOffset.y - delta, 0, editor->numLines * (int)fontData.maxHeight);
         }
 
         //Draw all of the text on screen
@@ -1859,7 +1876,6 @@ void Draw(float dt)
 
 
     cursorBlink.elapsedTime += dt;
-    bool cursorMoving = charKeyPressed || InputHeld(input.backspace) || ArrowKeysHeld(input.arrowKeys);
     if (!cursorMoving && cursorBlink.elapsedTime >= cursorBlink.interval)
     {
         holdChar.elapsedTime = 0.0f;
@@ -1871,8 +1887,8 @@ void Draw(float dt)
         if (cursorMoving) cursorBlink.elapsedTime = 0.0f;
         //Draw Cursor
 
-        Rect cursorDims = {currentCursorDrawPos.x, currentCursorDrawPos.x + 2, //TODO: Make width scale with font size
-                           currentCursorDrawPos.y, currentCursorDrawPos.y + (int)(fontData.maxHeight + fontData.lineGap)};
+        Rect cursorDims = {cursorDrawPos.x, cursorDrawPos.x + 2, //TODO: Make width scale with font size
+                           cursorDrawPos.y, cursorDrawPos.y + (int)(fontData.maxHeight + fontData.lineGap)};
         DrawRect(cursorDims, userSettings.cursorColour);
     }
 

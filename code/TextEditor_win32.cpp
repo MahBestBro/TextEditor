@@ -278,6 +278,8 @@ inline void win32_HandleInputUp(byte* inputFlags)
 
 internal void win32_ProcessInput()
 {
+	input.scrollWheelDelta = 0.0f;
+
     for (int i = 0; i < NUM_INPUTS; ++i)
     {
         if (InputDown(input.flags[i]))
@@ -455,7 +457,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         //wchar log[100];
         //swprintf_s(log, L"MousePos: {%i, %i}.\n", input.mousePixelPos.x, input.mousePixelPos.y);
         //OutputDebugString(log);
-
         win32_ProcessInput();
 
         //If the text editor is not the current app, reset the input
@@ -547,10 +548,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
         case WM_MBUTTONDOWN:
             win32_HandleInputDown(&input.middleMouse);
+            Print("test\n");
             return 0;
 
         case WM_MBUTTONUP:
             win32_HandleInputUp(&input.middleMouse);
+            return 0;
+
+        case WM_MOUSEWHEEL:
+			input.scrollWheelDelta = (float)GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
             return 0;
 
         case WM_MOUSEMOVE:

@@ -116,6 +116,7 @@ enum InputCode
 struct Input
 {
     IntPair mousePixelPos;
+    float scrollWheelDelta;
 
     union
     {
