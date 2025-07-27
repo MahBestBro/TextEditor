@@ -32,7 +32,7 @@
 
 #define PIXEL_IN_BYTES 4
 
-#define MAX_LINES 256
+#define MAX_LINES 2048
 #define MAX_UNDOS 256
 #define LINE_CHUNK_SIZE 128
 
