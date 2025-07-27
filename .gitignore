@@ -6,9 +6,7 @@
 *.obj
 
 /fonts/
-/includes/
 /lib/
 /test_txt_files/
-/config_code_generator/
 /.vs/
 /.vscode/
