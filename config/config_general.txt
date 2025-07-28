@@ -1,4 +1,4 @@
-fontFile "fonts/consolab.ttf"
+fontFile "C:\Windows\Fonts\consolab.ttf"
 backgroundColour 39,40,34
 lineNumColour 144,144,138
 cursorColour 255,255,255
